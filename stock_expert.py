@@ -20,7 +20,7 @@ from datetime import datetime, timedelta
 # CONFIGURATION GLOBALE
 # =============================================================================
 APP_NAME = "DRINK MANAGER PRO"
-APP_VERSION = "v30.0"
+APP_VERSION = "v30.1"
 DB_FILE = "enterprise_data.db"
 PORT_LOCK = 65432
 
@@ -104,18 +104,18 @@ class UpdateManager:
             
             bat_path = os.path.join(current_dir, "updater.bat")
             
-            # ATTENTION : C'est ici que le code risquait de passer en commentaire
-            # Les triples guillemets doivent être bien fermés
-            bat_script = f"""
-@echo off
-timeout /t 2 /nobreak > NUL
-del "{current_exe}"
-ren "{new_exe_name}" "{current_exe}"
-start "" "{current_exe}"
-del "%~f0"
-
+            # Script BAT généré proprement
+            bat_lines = [
+                "@echo off",
+                "timeout /t 2 /nobreak > NUL",
+                f'del "{current_exe}"',
+                f'ren "{new_exe_name}" "{current_exe}"',
+                f'start "" "{current_exe}"',
+                'del "%~f0"'
+            ]
+            
             with open(bat_path, "w") as f:
-                f.write(bat_script)
+                f.write("\n".join(bat_lines))
             
             subprocess.Popen([bat_path], shell=True)
             sys.exit(0)
