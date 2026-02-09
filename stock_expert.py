@@ -28,8 +28,8 @@ DEV_PHONE = "074 00 84 50"
 
 # CONFIGURATION DE LA MISE A JOUR (A REMPLACER PAR VOS LIENS REELS)
 # Exemple : Créez un Gist sur github.com ou hébergez ces fichiers
-URL_VERSION = "https://raw.githubusercontent.com/votre-compte/votre-repo/main/version.txt"
-URL_CODE = "https://raw.githubusercontent.com/votre-compte/votre-repo/main/main.py"
+URL_VERSION = "https://raw.githubusercontent.com/doufall/LogicielBar/refs/heads/main/version.txt"
+URL_CODE = "https://raw.githubusercontent.com/doufall/LogicielBar/refs/heads/main/stock_expert.py"
 
 # COULEURS
 C_PRIM = "#2980b9"
