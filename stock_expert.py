@@ -10,7 +10,7 @@ import shutil
 import calendar
 import time
 import subprocess
-import urllib.request # Pour internet
+import urllib.request
 import webbrowser
 from datetime import datetime, timedelta
 
@@ -18,28 +18,28 @@ from datetime import datetime, timedelta
 # CONFIGURATION GLOBALE
 # =============================================================================
 APP_NAME = "DRINK MANAGER PRO"
-APP_VERSION = "v24.0 (MISE A JOUR INTERNET)"
+APP_VERSION = "v25.0" # Version actuelle du logiciel
 DB_FILE = "enterprise_data.db"
 
-# INFOS DÉVELOPPEUR
+# --- INFOS DÉVELOPPEUR ---
 DEV_NAME = "ABDOUL FALL"
 DEV_EMAIL = "abdoulfall1293@gmail.com"
 DEV_PHONE = "074 00 84 50"
 
-# CONFIGURATION DE LA MISE A JOUR (A REMPLACER PAR VOS LIENS REELS)
-# Exemple : Créez un Gist sur github.com ou hébergez ces fichiers
-URL_VERSION = "https://raw.githubusercontent.com/doufall/LogicielBar/refs/heads/main/version.txt"
-URL_CODE = "https://raw.githubusercontent.com/doufall/LogicielBar/refs/heads/main/stock_expert.py"
+# --- CONFIGURATION MISE A JOUR (GITHUB) ---
+# Ces liens pointent vers VOTRE espace GitHub
+URL_VERSION = "https://raw.githubusercontent.com/AbdoulFall/LogicielBar/main/version.txt"
+URL_CODE = "https://raw.githubusercontent.com/AbdoulFall/LogicielBar/main/main.py"
 
-# COULEURS
-C_PRIM = "#2980b9"
-C_SEC = "#2c3e50"
-C_ACC = "#1abc9c"
-C_OK = "#27ae60"
-C_ERR = "#c0392b"
-C_WARN = "#e67e22"
-C_INFO = "#8e44ad"
-C_TXT = "#ecf0f1"
+# --- COULEURS ---
+C_PRIM = "#2980b9"   # Bleu
+C_SEC = "#2c3e50"    # Sombre
+C_ACC = "#1abc9c"    # Turquoise
+C_OK = "#27ae60"     # Vert
+C_ERR = "#c0392b"    # Rouge
+C_WARN = "#e67e22"   # Orange
+C_INFO = "#8e44ad"   # Violet
+C_TXT = "#ecf0f1"    # Texte
 
 # =============================================================================
 # MODULES EXTERNES
@@ -59,41 +59,30 @@ except: HAS_WIN32 = False
 # CLASSES UTILITAIRES
 # =============================================================================
 class UpdateManager:
-    """Gère la vérification et le téléchargement des mises à jour via Internet."""
-    
+    """Gère la mise à jour via GitHub."""
     @staticmethod
     def check_update():
         try:
-            # 1. Vérification de la connexion et lecture de la version en ligne
-            # Timeout de 5 secondes pour ne pas bloquer l'app si pas d'internet
-            with urllib.request.urlopen(URL_VERSION, timeout=5) as response:
-                online_version = response.read().decode('utf-8').strip()
+            # On lit le fichier version.txt sur GitHub
+            with urllib.request.urlopen(URL_VERSION, timeout=3) as response:
+                online_ver = response.read().decode('utf-8').strip()
             
-            # Comparaison simple des chaînes de caractères
-            if online_version != APP_VERSION:
-                msg = f"Une nouvelle version est disponible !\n\nActuelle : {APP_VERSION}\nEn ligne : {online_version}\n\nVoulez-vous la télécharger maintenant ?"
-                if messagebox.askyesno("MISE À JOUR DISPONIBLE", msg):
-                    UpdateManager.download_update(online_version)
-            else:
-                messagebox.showinfo("SYSTÈME À JOUR", f"Vous utilisez la dernière version ({APP_VERSION}).")
-                
-        except Exception as e:
-            messagebox.showerror("ERREUR CONNEXION", f"Impossible de vérifier la mise à jour.\nVérifiez votre internet.\n\nErreur: {e}")
+            # Si la version en ligne est différente de la version locale
+            if online_ver != APP_VERSION:
+                msg = f"✨ MISE À JOUR DISPONIBLE !\n\nVersion actuelle : {APP_VERSION}\nNouvelle version : {online_ver}\n\nTélécharger maintenant ?"
+                if messagebox.askyesno("UPDATE", msg):
+                    UpdateManager.download(online_ver)
+        except: 
+            pass # Si pas d'internet, on ne fait rien silencieusement
 
     @staticmethod
-    def download_update(new_ver):
+    def download(ver):
         try:
-            filename = f"DrinkManager_NEW_{new_ver}.py"
-            # Barre de progression indéterminée (optionnel, ici on fait simple)
-            urllib.request.urlretrieve(URL_CODE, filename)
-            
-            messagebox.showinfo("TÉLÉCHARGEMENT RÉUSSI", 
-                                f"La nouvelle version a été téléchargée sous le nom :\n👉 {filename}\n\n"
-                                "1. Fermez ce programme.\n"
-                                "2. Lancez le nouveau fichier.\n"
-                                "3. Supprimez l'ancien.")
+            new_file = f"DrinkManager_{ver}.py"
+            urllib.request.urlretrieve(URL_CODE, new_file)
+            messagebox.showinfo("SUCCÈS", f"Mise à jour téléchargée !\n\nNom du fichier : {new_file}\n\nFermez ce programme et lancez le nouveau fichier.")
         except Exception as e:
-            messagebox.showerror("ECHEC", f"Erreur lors du téléchargement : {e}")
+            messagebox.showerror("ERREUR", f"Echec téléchargement : {e}")
 
 class PrinterManager:
     CUT_COMMAND = b'\x1d\x56\x42\x00'
@@ -154,7 +143,7 @@ class MauricetteCalendar(ctk.CTkToplevel):
 
 class SecurityEngine:
     MASTER_PASS = "GnawoulioGnyroundaMauricetteKhamy"
-    SALT = "MAURICETTE_V24"
+    SALT = "MAURICETTE_V25"
     @staticmethod
     def get_hwid():
         try: return hashlib.sha256(f"{platform.node()}-{uuid.getnode()}".encode()).hexdigest()[:16].upper()
@@ -178,13 +167,21 @@ class DrinkManagerEnterprise(ctk.CTk):
         self.title(f"{APP_NAME} | {APP_VERSION}")
         self.geometry("1600x950")
         self.protocol("WM_DELETE_WINDOW", self.close)
+        
+        # Base de données
         self.conn = sqlite3.connect(DB_FILE)
         self.cur = self.conn.cursor()
         self.init_db()
         self.load_cfg()
         self.apply_style()
+        
+        # Variables Session
         self.hwid = SecurityEngine.get_hwid()
         self.user = None; self.cart = {}; self.trial = False
+        
+        # Vérification MAJ au démarrage
+        self.after(2000, UpdateManager.check_update) # Vérifie après 2 sec
+        
         self.check_lic()
 
     def safe_int(self, v): 
@@ -352,6 +349,7 @@ class DrinkManagerEnterprise(ctk.CTk):
             self.cur.execute("INSERT INTO sales_header (date_time, total_price, user_name) VALUES (?,?,?)", (dt, tot, self.user['name']))
             sid = self.cur.lastrowid
             
+            # --- STRUCTURE TICKET (Identique) ---
             body = f"Date: {dt}\nTicket #{sid}\nCaissier: {self.user['name'].upper()}\n"
             body += "-"*42 + "\n" + f"{'PRODUIT':<20} {'QTE':<5} {'TOTAL':>15}\n" + "-"*42 + "\n"
             
