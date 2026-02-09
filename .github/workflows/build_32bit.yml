@@ -1,0 +1,36 @@
+name: Compilation 32-bits
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: 1. Récupération du code
+      uses: actions/checkout@v4
+
+    - name: 2. Installation de Python 32-bits (CRUCIAL)
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        architecture: 'x86'  # C'est cette ligne qui force la compatibilité 32-bits !
+
+    - name: 3. Installation des modules
+      run: |
+        python -m pip install --upgrade pip
+        pip install customtkinter matplotlib pyinstaller pywin32
+
+    - name: 4. Création du fichier EXE
+      run: |
+        # On compile sans console (--noconsole) et en un seul fichier (--onefile)
+        pyinstaller --noconsole --onefile --collect-all customtkinter --name "stock_expert_1" stock_expert.py
+
+    - name: 5. Sauvegarde du résultat
+      uses: actions/upload-artifact@v4
+      with:
+        name: LOGICIEL_COMPATIBLE_32BIT
+        path: dist/stock_expert_1.exe
