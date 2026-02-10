@@ -662,9 +662,7 @@ class DrinkManagerEnterprise(ctk.CTk):
         
         def z():
             d = datetime.now().strftime("%Y-%m-%d")
-            q = """SELECT prod_name, SUM(qty), SUM(qty*unit_price) FROM sales_lines 
-                   JOIN sales_header ON sales_lines.sale_id = sales_header.id 
-                   WHERE date_time LIKE ? GROUP BY prod_name"""
+            q = "SELECT prod_name, SUM(qty), SUM(qty*unit_price) FROM sales_lines JOIN sales_header ON sales_lines.sale_id = sales_header.id WHERE date_time LIKE ? GROUP BY prod_name"
             self.cur.execute(q, (f"{d}%",)); rows = self.cur.fetchall()
             t = f"{self.store_name.center(42)}\nZ DE CAISSE DETAIL\nDATE: {d}\n"
             t += "="*42 + "\n" + f"{'PRODUIT':<20} {'QTE':<5} {'TOTAL':>15}\n" + "-"*42 + "\n"
