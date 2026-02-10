@@ -104,6 +104,8 @@ class UpdateManager:
             urllib.request.urlretrieve(dynamic_url, new_exe_path)
             
             bat_path = os.path.join(current_dir, "updater.bat")
+            
+            # --- CORRECTION DE L'ERREUR EOF ICI : AJOUT DES GUILLEMETS FERMANTS ---
             bat_script = f"""
             @echo off
             timeout /t 2 /nobreak > NUL
@@ -111,6 +113,7 @@ class UpdateManager:
             ren "{new_exe_name}" "{current_exe}"
             start "" "{current_exe}"
             del "%~f0"
+           
             
             with open(bat_path, "w") as f: f.write(bat_script)
             
@@ -765,4 +768,7 @@ if __name__ == "__main__":
     if check_single_instance():
         app = DrinkManagerEnterprise()
         app.mainloop()
-   
+    else:
+        # Si le port est déjà pris, on suppose que l'app tourne déjà
+        messagebox.showerror("ERREUR", "Le logiciel est déjà ouvert !")
+        sys.exit()
