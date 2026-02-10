@@ -111,7 +111,7 @@ class UpdateManager:
             ren "{new_exe_name}" "{current_exe}"
             start "" "{current_exe}"
             del "%~f0"
-            ""
+            
             with open(bat_path, "w") as f: f.write(bat_script)
             
             subprocess.Popen([bat_path], shell=True)
@@ -647,54 +647,31 @@ class DrinkManagerEnterprise(ctk.CTk):
         
         def rep():
             if not d1.get() or not d2.get(): return
-            
-            # --- CORRECTION ICI : UTILISATION DE GUILLEMETS SIMPLES ---
             q = "SELECT prod_name, SUM(qty), SUM(qty*unit_price) FROM sales_lines JOIN sales_header ON sales_lines.sale_id = sales_header.id WHERE date_time BETWEEN ? AND ? GROUP BY prod_name"
-            
-            try:
-                self.cur.execute(q, (d1.get() + " 00:00:00", d2.get() + " 23:59:59"))
-                rows = self.cur.fetchall()
-                
-                t = f"{self.store_name.center(42)}\nRAPPORT PERIODE\n{d1.get()} AU {d2.get()}\n"
-                t += "="*42 + "\n" + f"{'PRODUIT':<20} {'QTE':<5} {'TOTAL':>15}\n" + "-"*42 + "\n"
-                gt = 0
-                for r in rows:
-                    t += f"{r[0]:<20} {r[1]:<5} {r[2]:>15}\n"
-                    gt += r[2]
-                t += "="*42 + "\n" + f"CA TOTAL : {gt} FCFA".center(42) + "\n\n"
-                
-                if self.sel_print: 
-                    PrinterManager.print_ticket(self.sel_print, t)
-                messagebox.showinfo("RAPPORT", t)
-            except Exception as e:
-                messagebox.showerror("Erreur", f"Erreur SQL (rep) : {e}")
-
+            self.cur.execute(q, (d1.get()+" 00:00:00", d2.get()+" 23:59:59"))
+            rows = self.cur.fetchall()
+            t = f"{self.store_name.center(42)}\nRAPPORT PERIODE\n{d1.get()} AU {d2.get()}\n"
+            t += "="*42 + "\n" + f"{'PRODUIT':<20} {'QTE':<5} {'TOTAL':>15}\n" + "-"*42 + "\n"
+            gt = 0
+            for r in rows:
+                t += f"{r[0]:<20} {r[1]:<5} {r[2]:>15}\n"; gt += r[2]
+            t += "="*42 + "\n" + f"CA TOTAL : {gt} FCFA".center(42) + "\n\n"
+            if self.sel_print: PrinterManager.print_ticket(self.sel_print, t)
+            messagebox.showinfo("RAPPORT", t)
         ctk.CTkButton(rf, text="RECAP PÉRIODE", command=rep).pack(side="left", padx=10)
         
         def z():
             d = datetime.now().strftime("%Y-%m-%d")
-            
-            # --- CORRECTION ICI : UTILISATION DE GUILLEMETS SIMPLES ---
             q = "SELECT prod_name, SUM(qty), SUM(qty*unit_price) FROM sales_lines JOIN sales_header ON sales_lines.sale_id = sales_header.id WHERE date_time LIKE ? GROUP BY prod_name"
-            
-            try:
-                self.cur.execute(q, (f"{d}%",))
-                rows = self.cur.fetchall()
-                
-                t = f"{self.store_name.center(42)}\nZ DE CAISSE DETAIL\nDATE: {d}\n"
-                t += "="*42 + "\n" + f"{'PRODUIT':<20} {'QTE':<5} {'TOTAL':>15}\n" + "-"*42 + "\n"
-                gt = 0
-                for r in rows:
-                    t += f"{r[0]:<20} {r[1]:<5} {r[2]:>15}\n"
-                    gt += r[2]
-                t += "="*42 + "\n" + f"TOTAL JOUR : {gt} FCFA".center(42) + "\n\n"
-                
-                if self.sel_print: 
-                    PrinterManager.print_ticket(self.sel_print, t)
-                messagebox.showinfo("Z", t)
-            except Exception as e:
-                messagebox.showerror("Erreur", f"Erreur SQL (z) : {e}")
-
+            self.cur.execute(q, (f"{d}%",)); rows = self.cur.fetchall()
+            t = f"{self.store_name.center(42)}\nZ DE CAISSE DETAIL\nDATE: {d}\n"
+            t += "="*42 + "\n" + f"{'PRODUIT':<20} {'QTE':<5} {'TOTAL':>15}\n" + "-"*42 + "\n"
+            gt = 0
+            for r in rows:
+                t += f"{r[0]:<20} {r[1]:<5} {r[2]:>15}\n"; gt += r[2]
+            t += "="*42 + "\n" + f"TOTAL JOUR : {gt} FCFA".center(42) + "\n\n"
+            if self.sel_print: PrinterManager.print_ticket(self.sel_print, t)
+            messagebox.showinfo("Z", t)
         ctk.CTkButton(rf, text="TICKET Z", fg_color=C_WARN, command=z).pack(side="left", padx=5)
         
         def stk_val():
