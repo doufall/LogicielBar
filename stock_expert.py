@@ -647,11 +647,7 @@ class DrinkManagerEnterprise(ctk.CTk):
         
         def rep():
             if not d1.get() or not d2.get(): return
-            q = """SELECT prod_name, SUM(qty), SUM(qty*unit_price) 
-                   FROM sales_lines 
-                   JOIN sales_header ON sales_lines.sale_id = sales_header.id 
-                   WHERE date_time BETWEEN ? AND ? 
-                   GROUP BY prod_name"""
+            q = "SELECT prod_name, SUM(qty), SUM(qty*unit_price) FROM sales_lines JOIN sales_header ON sales_lines.sale_id = sales_header.id WHERE date_time BETWEEN ? AND ? GROUP BY prod_name"
             self.cur.execute(q, (d1.get()+" 00:00:00", d2.get()+" 23:59:59"))
             rows = self.cur.fetchall()
             t = f"{self.store_name.center(42)}\nRAPPORT PERIODE\n{d1.get()} AU {d2.get()}\n"
