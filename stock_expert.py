@@ -648,20 +648,28 @@ class DrinkManagerEnterprise(ctk.CTk):
         d2 = ctk.CTkEntry(rf, width=100); d2.pack(side="left", padx=2)
         ctk.CTkButton(rf, text="📅", width=30, command=lambda: MauricetteCalendar(self, lambda d: (d2.delete(0, 'end'), d2.insert(0, d)))).pack(side="left")
         
-        def rep():
+       def rep():
             if not d1.get() or not d2.get(): return
-            q = """SELECT prod_name, SUM(qty), SUM(qty*unit_price) FROM sales_lines 
+            # Utilisation d'une chaîne simple (sans f devant) pour éviter les erreurs d'expression
+            q = """SELECT prod_name, SUM(qty), SUM(qty*unit_price) 
+                   FROM sales_lines 
                    JOIN sales_header ON sales_lines.sale_id = sales_header.id 
-                   WHERE date_time BETWEEN ? AND ? GROUP BY prod_name"""
-            self.cur.execute(q, (d1.get()+" 00:00:00", d2.get()+" 23:59:59"))
+                   WHERE date_time BETWEEN ? AND ? 
+                   GROUP BY prod_name"""
+            
+            self.cur.execute(q, (d1.get() + " 00:00:00", d2.get() + " 23:59:59"))
             rows = self.cur.fetchall()
+            
             t = f"{self.store_name.center(42)}\nRAPPORT PERIODE\n{d1.get()} AU {d2.get()}\n"
             t += "="*42 + "\n" + f"{'PRODUIT':<20} {'QTE':<5} {'TOTAL':>15}\n" + "-"*42 + "\n"
             gt = 0
             for r in rows:
-                t += f"{r[0]:<20} {r[1]:<5} {r[2]:>15}\n"; gt += r[2]
+                t += f"{r[0]:<20} {r[1]:<5} {r[2]:>15}\n"
+                gt += r[2]
             t += "="*42 + "\n" + f"CA TOTAL : {gt} FCFA".center(42) + "\n\n"
-            if self.sel_print: PrinterManager.print_ticket(self.sel_print, t)
+            
+            if self.sel_print: 
+                PrinterManager.print_ticket(self.sel_print, t)
             messagebox.showinfo("RAPPORT", t)
         ctk.CTkButton(rf, text="RECAP PÉRIODE", command=rep).pack(side="left", padx=10)
         
