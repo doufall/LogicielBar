@@ -60,7 +60,6 @@ except: HAS_WIN32 = False
 # GESTION INSTANCE UNIQUE
 # =============================================================================
 def check_single_instance():
-    """Empêche d'ouvrir le logiciel deux fois."""
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.bind(('127.0.0.1', PORT_LOCK))
@@ -69,7 +68,7 @@ def check_single_instance():
         return None
 
 # =============================================================================
-# UPDATE MANAGER
+# UPDATE MANAGER (SIMPLIFIÉ SANS BAT)
 # =============================================================================
 class UpdateManager:
     @staticmethod
@@ -103,22 +102,13 @@ class UpdateManager:
             messagebox.showinfo("TÉLÉCHARGEMENT", "Téléchargement en cours...\nNe touchez à rien.")
             urllib.request.urlretrieve(dynamic_url, new_exe_path)
             
-            bat_path = os.path.join(current_dir, "updater.bat")
+            # --- MODIFICATION ICI : COMMANDE DIRECTE SANS FICHIER BAT ---
+            # On construit une commande système unique qui attend, supprime et renomme
+            cmd = f'cmd /c timeout /t 2 /nobreak > NUL & del "{current_exe}" & ren "{new_exe_name}" "{current_exe}" & start "" "{current_exe}"'
             
-            # --- CORRECTION DE L'ERREUR EOF ICI : AJOUT DES GUILLEMETS FERMANTS ---
-            bat_script = f"""
-            @echo off
-            timeout /t 2 /nobreak > NUL
-            del "{current_exe}"
-            ren "{new_exe_name}" "{current_exe}"
-            start "" "{current_exe}"
-            del "%~f0"
-           
-            
-            with open(bat_path, "w") as f: f.write(bat_script)
-            
-            subprocess.Popen([bat_path], shell=True)
+            subprocess.Popen(cmd, shell=True)
             sys.exit(0)
+            
         except Exception as e:
             messagebox.showerror("ERREUR", f"Echec update auto :\n{e}")
 
