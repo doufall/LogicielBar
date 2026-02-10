@@ -765,7 +765,4 @@ if __name__ == "__main__":
     if check_single_instance():
         app = DrinkManagerEnterprise()
         app.mainloop()
-    else:
-        # Si le port est déjà pris, on suppose que l'app tourne déjà
-        messagebox.showerror("ERREUR", "Le logiciel est déjà ouvert !")
-        sys.exit()
+   
