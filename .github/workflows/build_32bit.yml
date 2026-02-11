@@ -5,6 +5,10 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
 
+# INDISPENSABLE : Donne l'autorisation à GitHub Actions de créer une Release
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
@@ -13,27 +17,34 @@ jobs:
     - name: 1. Récupération du code
       uses: actions/checkout@v4
 
-    - name: 2. Installation de Python 3.9 (32-bits Stable)
+    - name: 2. Lecture de la version depuis version.txt
+      id: get_version
+      run: |
+        $VER = Get-Content version.txt
+        echo "VERSION=$VER" >> $env:GITHUB_ENV
+
+    - name: 3. Installation de Python 3.9 (32-bits Stable)
       uses: actions/setup-python@v5
       with:
-        python-version: '3.9' # <--- CHANGEMENT ICI (Plus compatible)
-        architecture: 'x86'   # Force le mode 32-bits
+        python-version: '3.9'
+        architecture: 'x86'
 
-    - name: 3. Mise à jour de pip
+    - name: 4. Mise à jour de pip
       run: python -m pip install --upgrade pip
 
-    - name: 4. Installation des modules
-      # On installe une version spécifique de matplotlib compatible 32-bits
+    - name: 5. Installation des modules
       run: |
         pip install customtkinter pyinstaller pywin32
         pip install "matplotlib<3.8" 
 
-    - name: 5. Création du fichier EXE
+    - name: 6. Création du fichier EXE
       run: |
         pyinstaller --noconsole --onefile --collect-all customtkinter --name "stock_expert_1" stock_expert.py
 
-    - name: 6. Sauvegarde du résultat
-      uses: actions/upload-artifact@v4
+    - name: 7. Création de la Release automatique !
+      uses: softprops/action-gh-release@v2
       with:
-        name: LOGICIEL_COMPATIBLE_32BIT
-        path: dist/stock_expert_1.exe
+        tag_name: ${{ env.VERSION }}
+        name: Mise à jour ${{ env.VERSION }}
+        files: dist/stock_expert_1.exe
+        make_latest: true
