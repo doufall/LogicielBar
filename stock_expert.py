@@ -427,94 +427,224 @@ class DrinkManagerEnterprise(ctk.CTk):
             ctk.CTkButton(self.gp, text=f"{n}\n{pr} F\n({qt})", fg_color=c, width=160, height=120, font=("Arial", 14, "bold"), command=lambda x=n, y=pr, z=qt: self.add_c(x, y, z)).pack(side="left", padx=5, pady=5)
 
     # --- STOCK ET TRAÇABILITÉ (BLOC RÉPARÉ) ---
-    def init_stock(self):
-        # 1. Zone des formulaires
-        tf = ctk.CTkFrame(self.t_inv)
-        tf.pack(fill="x", padx=5, pady=5)
-        
-        # Création
-        c1 = ctk.CTkFrame(tf); c1.pack(side="left", expand=True, fill="both", padx=2)
-        ctk.CTkLabel(c1, text="PRODUITS", font=self.f_small).pack()
-        en = ctk.CTkEntry(c1, placeholder_text="Nom", height=35); en.pack(pady=2, fill="x")
-        ec = ctk.CTkComboBox(c1, values=["CAT..."] + [r[0] for r in self.cur.execute("SELECT name FROM categories")], height=35); ec.pack(pady=2, fill="x")
-        epa = ctk.CTkEntry(c1, placeholder_text="P.Achat", height=35); epa.pack(pady=2, fill="x")
-        epv = ctk.CTkEntry(c1, placeholder_text="P.Vente", height=35); epv.pack(pady=2, fill="x")
-        def create():
-            if not self.ask_admin(): return
-            n = en.get().strip().upper()
-            if n:
-                try:
-                    self.cur.execute("INSERT INTO products (name, category, buy_price, sell_price, stock_qty) VALUES (?,?,?,?,0)", (n, ec.get(), self.safe_int(epa.get()), self.safe_int(epv.get())))
-                    self.conn.commit(); self.ref_stock(); en.delete(0, 'end'); messagebox.showinfo("OK", "Créé")
-                except: messagebox.showerror("Err", "Existe déjà")
-        ctk.CTkButton(c1, text="CRÉER", fg_color=C_INFO, command=create).pack(pady=5, fill="x")
 
-        # Entrée
-        c2 = ctk.CTkFrame(tf, border_color=C_OK, border_width=1); c2.pack(side="left", expand=True, fill="both", padx=2)
-        ctk.CTkLabel(c2, text="ENTRÉE STOCK", text_color=C_OK).pack()
-        cb = ctk.CTkComboBox(c2, values=[], height=35); cb.pack(pady=5, fill="x")
-        eq = ctk.CTkEntry(c2, placeholder_text="Qté", height=35); eq.pack(pady=5, fill="x")
-        def add_stk():
-            if not self.ask_admin(): return
-            q, p = self.safe_int(eq.get()), cb.get()
-            if q > 0:
-                self.cur.execute("UPDATE products SET stock_qty=stock_qty+? WHERE name=?", (q, p))
-                self.cur.execute("INSERT INTO stock_movements (date,prod_name,qty,type,user) VALUES (?,?,?,?,?)", (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), p, q, "ENTREE", self.user['name']))
-                self.conn.commit(); self.ref_stock(); eq.delete(0, 'end')
-        ctk.CTkButton(c2, text="VALIDER", fg_color=C_OK, command=add_stk).pack(pady=5, fill="x")
 
-        # Perte
-        c3 = ctk.CTkFrame(tf, border_color=C_ERR, border_width=1); c3.pack(side="left", expand=True, fill="both", padx=2)
-        ctk.CTkLabel(c3, text="PERTE", text_color=C_ERR).pack()
-        cp = ctk.CTkComboBox(c3, values=[], height=35); cp.pack(pady=5, fill="x")
-        eqp = ctk.CTkEntry(c3, placeholder_text="Qté", height=35); eqp.pack(pady=5, fill="x")
-        erp = ctk.CTkEntry(c3, placeholder_text="Motif", height=35); erp.pack(pady=5, fill="x")
-        def loss():
-            if not self.ask_admin(): return
-            q, p = self.safe_int(eqp.get()), cp.get()
-            if q > 0:
-                self.cur.execute("UPDATE products SET stock_qty=stock_qty-? WHERE name=?", (q, p))
-                self.cur.execute("INSERT INTO stock_movements (date,prod_name,qty,type,reason_or_ref,user) VALUES (?,?,?,?,?,?)", (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), p, q, "PERTE", erp.get(), self.user['name']))
-                self.conn.commit(); self.ref_stock(); eqp.delete(0, 'end')
-        ctk.CTkButton(c3, text="PERTE", fg_color=C_ERR, command=loss).pack(pady=5, fill="x")
+def get_prods(self):
+    """Retourne la liste des produits"""
+    self.cur.execute("SELECT name FROM products ORDER BY name")
+    return [r[0] for r in self.cur.fetchall()]
 
-        self.cbs = [cb, cp]
+def init_stock(self):
 
-        # 2. Tableau de Traçabilité
-        table_frame = ctk.CTkFrame(self.t_inv)
-        table_frame.pack(fill="both", expand=True, padx=10, pady=5)
-        
-        style = ttk.Style()
-        style.configure("Treeview", background="#2c3e50", foreground="white", fieldbackground="#2c3e50", rowheight=30)
-        
-        cols = ("ID", "Date", "Fait par", "Action", "Produit", "Qté", "Motif")
-        self.tree = ttk.Treeview(table_frame, columns=cols, show="headings")
-        for c in cols: 
-            self.tree.heading(c, text=c)
-            self.tree.column(c, width=100, anchor="center")
-        self.tree.pack(fill="both", expand=True)
+    # ===============================
+    # ZONE FORMULAIRES
+    # ===============================
+    form_frame = ctk.CTkFrame(self.t_inv)
+    form_frame.pack(fill="x", padx=10, pady=10)
 
-        bb = ctk.CTkFrame(self.t_inv); bb.pack(pady=5)
-        ctk.CTkButton(bb, text="🔄 ACTUALISER", command=self.ref_stock).pack(side="left", padx=10)
-        ctk.CTkButton(bb, text="📥 EXPORT STOCK", fg_color=C_PRIM, command=self.stock_export_csv).pack(side="left", padx=10)
+    # --------- CREATION PRODUIT ----------
+    create_frame = ctk.CTkFrame(form_frame)
+    create_frame.pack(side="left", expand=True, fill="both", padx=5)
+
+    ctk.CTkLabel(create_frame, text="CRÉER PRODUIT", font=self.f_small).pack(pady=5)
+
+    self.stock_name = ctk.CTkEntry(create_frame, placeholder_text="Nom produit")
+    self.stock_name.pack(fill="x", pady=3)
+
+    self.stock_cat = ctk.CTkComboBox(
+        create_frame,
+        values=[r[0] for r in self.cur.execute("SELECT name FROM categories")]
+    )
+    self.stock_cat.pack(fill="x", pady=3)
+
+    self.stock_buy = ctk.CTkEntry(create_frame, placeholder_text="Prix Achat")
+    self.stock_buy.pack(fill="x", pady=3)
+
+    self.stock_sell = ctk.CTkEntry(create_frame, placeholder_text="Prix Vente")
+    self.stock_sell.pack(fill="x", pady=3)
+
+    def create_product():
+        if not self.ask_admin():
+            return
+
+        name = self.stock_name.get().strip().upper()
+        if not name:
+            return
+
+        try:
+            self.cur.execute("""
+                INSERT INTO products (name, category, buy_price, sell_price, stock_qty)
+                VALUES (?,?,?,?,0)
+            """, (
+                name,
+                self.stock_cat.get(),
+                self.safe_int(self.stock_buy.get()),
+                self.safe_int(self.stock_sell.get())
+            ))
+
+            self.conn.commit()
+            self.ref_stock()
+            self.stock_name.delete(0, "end")
+            messagebox.showinfo("OK", "Produit créé")
+
+        except sqlite3.IntegrityError:
+            messagebox.showerror("Erreur", "Produit déjà existant")
+
+    ctk.CTkButton(create_frame, text="CRÉER", command=create_product).pack(pady=5, fill="x")
+
+    # --------- ENTREE STOCK ----------
+    entry_frame = ctk.CTkFrame(form_frame, border_color="green", border_width=2)
+    entry_frame.pack(side="left", expand=True, fill="both", padx=5)
+
+    ctk.CTkLabel(entry_frame, text="ENTRÉE STOCK").pack(pady=5)
+
+    self.entry_product = ctk.CTkComboBox(entry_frame, values=[])
+    self.entry_product.pack(fill="x", pady=3)
+
+    self.entry_qty = ctk.CTkEntry(entry_frame, placeholder_text="Quantité")
+    self.entry_qty.pack(fill="x", pady=3)
+
+    def add_stock():
+        if not self.ask_admin():
+            return
+
+        qty = self.safe_int(self.entry_qty.get())
+        prod = self.entry_product.get()
+
+        if qty <= 0 or not prod:
+            return
+
+        self.cur.execute(
+            "UPDATE products SET stock_qty = stock_qty + ? WHERE name=?",
+            (qty, prod)
+        )
+
+        self.cur.execute("""
+            INSERT INTO stock_movements (date, prod_name, qty, type, user)
+            VALUES (?,?,?,?,?)
+        """, (
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            prod,
+            qty,
+            "ENTREE",
+            self.user["name"]
+        ))
+
+        self.conn.commit()
         self.ref_stock()
+        self.entry_qty.delete(0, "end")
 
-    def ref_stock(self):
-        l = self.get_prods()
-        for c in self.cbs: c.configure(values=l)
-        for i in self.tree.get_children(): self.tree.delete(i)
-        self.cur.execute("SELECT id, date, user, type, prod_name, qty, reason_or_ref FROM stock_movements ORDER BY id DESC LIMIT 100")
-        for r in self.cur.fetchall():
-            self.tree.insert("", "end", values=(r[0], r[1], str(r[2]).upper(), r[3], r[4], r[5], r[6] if r[6] else "-"))
-        try: self.ref_pos()
-        except: pass
+    ctk.CTkButton(entry_frame, text="VALIDER", command=add_stock).pack(pady=5, fill="x")
+
+    # --------- PERTE ----------
+    loss_frame = ctk.CTkFrame(form_frame, border_color="red", border_width=2)
+    loss_frame.pack(side="left", expand=True, fill="both", padx=5)
+
+    ctk.CTkLabel(loss_frame, text="PERTE").pack(pady=5)
+
+    self.loss_product = ctk.CTkComboBox(loss_frame, values=[])
+    self.loss_product.pack(fill="x", pady=3)
+
+    self.loss_qty = ctk.CTkEntry(loss_frame, placeholder_text="Quantité")
+    self.loss_qty.pack(fill="x", pady=3)
+
+    self.loss_reason = ctk.CTkEntry(loss_frame, placeholder_text="Motif")
+    self.loss_reason.pack(fill="x", pady=3)
+
+    def remove_stock():
+        if not self.ask_admin():
+            return
+
+        qty = self.safe_int(self.loss_qty.get())
+        prod = self.loss_product.get()
+
+        if qty <= 0 or not prod:
+            return
+
+        self.cur.execute(
+            "UPDATE products SET stock_qty = stock_qty - ? WHERE name=?",
+            (qty, prod)
+        )
+
+        self.cur.execute("""
+            INSERT INTO stock_movements
+            (date, prod_name, qty, type, reason_or_ref, user)
+            VALUES (?,?,?,?,?,?)
+        """, (
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            prod,
+            qty,
+            "PERTE",
+            self.loss_reason.get(),
+            self.user["name"]
+        ))
+
+        self.conn.commit()
+        self.ref_stock()
+        self.loss_qty.delete(0, "end")
+
+    ctk.CTkButton(loss_frame, text="VALIDER PERTE", command=remove_stock).pack(pady=5, fill="x")
+
+    # ===============================
+    # TABLEAU TRAÇABILITÉ
+    # ===============================
+    table_frame = ctk.CTkFrame(self.t_inv)
+    table_frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+    cols = ("ID", "Date", "Utilisateur", "Type", "Produit", "Qté", "Motif")
+
+    self.tree = ttk.Treeview(table_frame, columns=cols, show="headings")
+
+    for col in cols:
+        self.tree.heading(col, text=col)
+        self.tree.column(col, anchor="center", width=120)
+
+    self.tree.pack(fill="both", expand=True)
+
+    # Boutons
+    bottom_frame = ctk.CTkFrame(self.t_inv)
+    bottom_frame.pack(pady=5)
+
+    ctk.CTkButton(bottom_frame, text="ACTUALISER", command=self.ref_stock).pack(side="left", padx=10)
+    ctk.CTkButton(bottom_frame, text="EXPORT CSV", command=self.stock_export_csv).pack(side="left", padx=10)
+
+    self.ref_stock()
 
 
-    def stock_export_csv(self):
-        p = filedialog.asksaveasfilename(defaultextension=".csv")
-        if p: 
-            ExportManager.to_csv(self.cur, "products", p)
-            messagebox.showinfo("OK", "Stock exporté en CSV avec succès.")
+def ref_stock(self):
+
+    products = self.get_prods()
+
+    if hasattr(self, "entry_product"):
+        self.entry_product.configure(values=products)
+
+    if hasattr(self, "loss_product"):
+        self.loss_product.configure(values=products)
+
+    if hasattr(self, "tree"):
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+
+        self.cur.execute("""
+            SELECT id, date, user, type, prod_name, qty, reason_or_ref
+            FROM stock_movements
+            ORDER BY id DESC
+            LIMIT 200
+        """)
+
+        for row in self.cur.fetchall():
+            self.tree.insert("", "end", values=row)
+
+
+
+def stock_export_csv(self):
+    path = filedialog.asksaveasfilename(defaultextension=".csv")
+    if not path:
+        return
+
+    ExportManager.to_csv(self.cur, "products", path)
+    messagebox.showinfo("OK", "Export terminé")
+
 
     def sales_export_csv(self):
         p = filedialog.asksaveasfilename(defaultextension=".csv")
