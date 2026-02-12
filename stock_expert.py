@@ -21,7 +21,7 @@ from datetime import datetime, timedelta
 # CONFIGURATION GLOBALE
 # =============================================================================
 APP_NAME = "DRINK MANAGER PRO"
-APP_VERSION = "v32.0" 
+APP_VERSION = "v31.0" 
 DB_FILE = "enterprise_data.db"
 PORT_LOCK = 65432 
 
@@ -336,32 +336,54 @@ class DrinkManagerEnterprise(ctk.CTk):
         if r: self.user = {"name": u, "role": r[0]}; self.dash()
         else: messagebox.showerror("ERREUR", "Nom d'utilisateur ou mot de passe incorrect.")
 
-    # --- DASHBOARD ---
+   # =============================================================================
+    # TABLEAU DE BORD PRINCIPAL
+    # =============================================================================
     def dash(self):
+        # 1. Nettoyage de l'écran précédent (Login)
         self.clear()
-        ctk.set_widget_scaling(1.1) # Zoom global de 10%
-        tabs = ctk.CTkTabview(self, height=800)
-        tabs.pack(fill="both", expand=True, padx=10, pady=10)
         
-        # Configuration de la police des onglets
-        tabs._segmented_button.configure(font=self.f_norm, height=50) 
+        # 2. Zoom et Style
+        ctk.set_widget_scaling(1.1) 
+        
+        # 3. Création du conteneur d'onglets (Tabview)
+        # On l'assigne à self.main_tabs pour être sûr de sa référence
+        self.main_tabs = ctk.CTkTabview(self, height=800)
+        self.main_tabs.pack(fill="both", expand=True, padx=10, pady=10)
+        self.main_tabs._segmented_button.configure(font=self.f_norm, height=50) 
 
-        self.t_pos = tabs.add("CAISSE")
-        self.t_inv = tabs.add("STOCK")
+        # 4. AJOUT DES ONGLETS (L'ordre est important)
+        self.t_pos = self.main_tabs.add("CAISSE")
+        self.t_inv = self.main_tabs.add("STOCK")
         
+        # 5. ONGLETS ADMINISTRATEUR
         if self.user["role"] == "admin":
-            self.t_stf = tabs.add("EQUIPE")
-            self.t_stat = tabs.add("RAPPORTS")
-            self.t_cfg = tabs.add("CONFIG")
-            self.t_logs = tabs.add("JOURNAL")
+            self.t_stf = self.main_tabs.add("EQUIPE")
+            self.t_stat = self.main_tabs.add("RAPPORTS")
+            self.t_cfg = self.main_tabs.add("CONFIG")
+            self.t_logs = self.main_tabs.add("JOURNAL")
             
-            self.init_staff()
-            self.init_stats()
-            self.init_cfg()
-            self.init_logs()
+            # Initialisation des contenus Admin
+            # On utilise try/except pour qu'une erreur dans un onglet ne bloque pas les autres
+            try: self.init_staff()
+            except Exception as e: print(f"Erreur Staff: {e}")
             
-        self.init_pos()
-        self.init_stock()
+            try: self.init_stats()
+            except Exception as e: print(f"Erreur Stats: {e}")
+            
+            try: self.init_cfg()
+            except Exception as e: print(f"Erreur Config: {e}")
+            
+            try: self.init_logs()
+            except Exception as e: print(f"Erreur Logs: {e}")
+            
+        # 6. INITIALISATION DES CONTENUS STANDARDS
+        # Ces deux fonctions DOIVENT être appelées en dernier
+        self.init_pos()   # Remplit la Caisse
+        self.init_stock() # Remplit le Stock (C'est ici que tes éléments apparaîtront)
+        
+        # Forcer la mise à jour visuelle
+        self.update_idletasks()
 
     # --- POS (CAISSE) ---
     def init_pos(self):
@@ -545,7 +567,8 @@ class DrinkManagerEnterprise(ctk.CTk):
         p = filedialog.asksaveasfilename(defaultextension=".csv")
         if p: 
             ExportManager.to_csv(self.cur, "sales_header", p)
-            messagebox.showinfo("OK", "Ventes exportées en CSV avec succès.")# =============================================================================
+            messagebox.showinfo("OK", "Ventes exportées en CSV avec succès.")
+    # =============================================================================
     # GESTION ÉQUIPE (STAFF)
     # =============================================================================
     def init_staff(self):
