@@ -21,7 +21,7 @@ from datetime import datetime, timedelta
 # CONFIGURATION GLOBALE
 # =============================================================================
 APP_NAME = "DRINK MANAGER PRO"
-APP_VERSION = "v35.0" 
+APP_VERSION = "v31.0" 
 DB_FILE = "enterprise_data.db"
 PORT_LOCK = 65432 
 
@@ -204,6 +204,16 @@ class SecurityEngine:
 # =============================================================================
 #%%
 class DrinkManagerEnterprise(ctk.CTk):
+
+    def close(self):
+      if messagebox.askyesno("Quitter", "Voulez-vous vraiment quitter ?"):
+        try:
+            self.conn.close()
+        except:
+            pass
+        self.destroy()
+
+
     def __init__(self):
         super().__init__()
         self.title(f"{APP_NAME} | {APP_VERSION}")
