@@ -21,7 +21,7 @@ from datetime import datetime, timedelta
 # CONFIGURATION GLOBALE
 # =============================================================================
 APP_NAME = "DRINK MANAGER PRO"
-APP_VERSION = "v31.0" 
+APP_VERSION = "v32.0" 
 DB_FILE = "enterprise_data.db"
 PORT_LOCK = 65432 
 
@@ -467,107 +467,7 @@ class DrinkManagerEnterprise(ctk.CTk):
             
         ctk.CTkButton(w, text="VALIDER LE PAIEMENT", height=80, width=300, fg_color=C_OK, font=("Arial", 20, "bold"), command=val).pack(pady=30)
 
-    # --- STOCK ---
-    def init_stock(self):
-        tf = ctk.CTkFrame(self.t_inv); tf.pack(fill="x", padx=5, pady=5)
-        
-        # 1. Création Produit
-        c1 = ctk.CTkFrame(tf); c1.pack(side="left", expand=True, fill="both", padx=2)
-        ctk.CTkLabel(c1, text="CRÉATION PRODUIT", font=self.f_small).pack()
-        en = ctk.CTkEntry(c1, placeholder_text="Nom", height=40); en.pack(pady=2, fill="x")
-        ec = ctk.CTkComboBox(c1, values=["CAT..."] + [r[0] for r in self.cur.execute("SELECT name FROM categories")], height=40); ec.pack(pady=2, fill="x")
-        epa = ctk.CTkEntry(c1, placeholder_text="P.Achat (0 si vide)", height=40); epa.pack(pady=2, fill="x")
-        epv = ctk.CTkEntry(c1, placeholder_text="P.Vente", height=40); epv.pack(pady=2, fill="x")
-        
-        def create():
-            if not self.ask_admin(): return
-            nom = en.get().strip().upper()
-            if not nom: messagebox.showwarning("ERREUR", "Nom obligatoire"); return
-            pa = self.safe_int(epa.get()); pv = self.safe_int(epv.get())
-            try: 
-                self.cur.execute("INSERT INTO products (name, category, buy_price, sell_price, stock_qty) VALUES (?,?,?,?,0)", (nom, ec.get(), pa, pv))
-                self.conn.commit(); self.ref_stock(); en.delete(0, 'end'); epa.delete(0, 'end'); epv.delete(0, 'end'); ec.set("CAT..."); messagebox.showinfo("OK", f"Produit '{nom}' créé !")
-            except Exception as e: messagebox.showerror("Err", f"Erreur: {e}")
-        ctk.CTkButton(c1, text="ENREGISTRER", height=40, fg_color=C_INFO, command=create).pack(pady=5, fill="x")
-        
-        def mod_win():
-            if not self.ask_admin(): return
-            w = ctk.CTkToplevel(self); w.geometry("400x500"); w.grab_set(); w.focus_force() 
-            c = ctk.CTkComboBox(w, values=self.get_prods(), height=40); c.pack(pady=10)
-            e1 = ctk.CTkEntry(w, placeholder_text="Nouveau Nom", height=40); e1.pack(pady=5)
-            e2 = ctk.CTkEntry(w, placeholder_text="Nouveau PV", height=40); e2.pack(pady=5)
-            def save(): 
-                self.cur.execute("UPDATE products SET name=?, sell_price=? WHERE name=?", (e1.get().upper(), int(e2.get()), c.get()))
-                self.conn.commit(); self.ref_stock(); w.destroy()
-            ctk.CTkButton(w, text="SAUVEGARDER", height=40, command=save).pack(pady=10)
-            def dele():
-                if messagebox.askyesno("SUR?", "Supprimer définitivement ce produit ?"): 
-                    self.cur.execute("DELETE FROM products WHERE name=?", (c.get(),))
-                    self.conn.commit(); self.ref_stock(); w.destroy()
-            ctk.CTkButton(w, text="SUPPRIMER", fg_color=C_ERR, height=40, command=dele).pack()
-            
-        f_utils = ctk.CTkFrame(c1, fg_color="transparent"); f_utils.pack(pady=5, fill="x")
-        ctk.CTkButton(f_utils, text="MODIFIER", width=80, command=mod_win).pack(side="left", padx=2)
-        ctk.CTkButton(f_utils, text="+ CATÉGORIE", width=80, command=lambda: (self.cur.execute("INSERT OR IGNORE INTO categories VALUES (?)", (simpledialog.askstring("C", "Nom"),)), self.conn.commit())).pack(side="right", padx=2)# --- 2. Entrée Stock ---
-        c2 = ctk.CTkFrame(tf, border_color=C_OK, border_width=2)
-        c2.pack(side="left", expand=True, fill="both", padx=2)
-        ctk.CTkLabel(c2, text="ENTRÉE STOCK", text_color=C_OK, font=self.f_small).pack()
-        cb = ctk.CTkComboBox(c2, values=[], height=40); cb.pack(pady=5, fill="x")
-        eq = ctk.CTkEntry(c2, placeholder_text="Qté à ajouter", height=40); eq.pack(pady=5, fill="x")
-        
-        def add_stk():
-            if not self.ask_admin(): return
-            q = self.safe_int(eq.get()); p = cb.get()
-            if q <= 0: return
-            dt = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            self.cur.execute("UPDATE products SET stock_qty=stock_qty+? WHERE name=?", (q, p))
-            self.cur.execute("INSERT INTO stock_movements (date,prod_name,qty,type,user) VALUES (?,?,?,?,?)", (dt, p, q, "ENTREE", self.user['name']))
-            self.conn.commit(); self.ref_stock(); eq.delete(0, 'end')
-            messagebox.showinfo("OK", f"{q} x {p} ajoutés au stock.")
-            
-        ctk.CTkButton(c2, text="VALIDER L'ENTRÉE", height=50, fg_color=C_OK, command=add_stk).pack(pady=20, fill="x")
-
-        # --- 3. Perte / Casse ---
-        c3 = ctk.CTkFrame(tf, border_color=C_ERR, border_width=2)
-        c3.pack(side="left", expand=True, fill="both", padx=2)
-        ctk.CTkLabel(c3, text="PERTE / CASSE", text_color=C_ERR, font=self.f_small).pack()
-        cp = ctk.CTkComboBox(c3, values=[], height=40); cp.pack(pady=5, fill="x")
-        eqp = ctk.CTkEntry(c3, placeholder_text="Qté perdue", height=40); eqp.pack(pady=5, fill="x")
-        erp = ctk.CTkEntry(c3, placeholder_text="Motif (ex: Tombé)", height=40); erp.pack(pady=5, fill="x")
-        
-        def loss():
-            if not self.ask_admin(): return
-            q = self.safe_int(eqp.get()); p = cp.get()
-            if q <= 0: return
-            dt = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            self.cur.execute("UPDATE products SET stock_qty=stock_qty-? WHERE name=?", (q, p))
-            self.cur.execute("INSERT INTO stock_movements (date,prod_name,qty,type,reason_or_ref,user) VALUES (?,?,?,?,?,?)", (dt, p, q, "PERTE", erp.get(), self.user['name']))
-            self.conn.commit(); self.ref_stock(); eqp.delete(0, 'end'); erp.delete(0, 'end')
-            messagebox.showinfo("OK", "Perte enregistrée.")
-            
-        ctk.CTkButton(c3, text="VALIDER LA PERTE", height=40, fg_color=C_ERR, command=loss).pack(pady=10, fill="x")
-
-        # --- 4. Offre / Cadeau ---
-        c4 = ctk.CTkFrame(tf, border_color=C_INFO, border_width=2)
-        c4.pack(side="left", expand=True, fill="both", padx=2)
-        ctk.CTkLabel(c4, text="OFFRE / CADEAU", text_color=C_INFO, font=self.f_small).pack()
-        co = ctk.CTkComboBox(c4, values=[], height=40); co.pack(pady=5, fill="x")
-        eqo = ctk.CTkEntry(c4, placeholder_text="Qté offerte", height=40); eqo.pack(pady=5, fill="x")
-        ero = ctk.CTkEntry(c4, placeholder_text="Pour qui ?", height=40); ero.pack(pady=5, fill="x")
-        
-        def offer():
-            if not self.ask_admin(): return
-            q = self.safe_int(eqo.get()); p = co.get()
-            if q <= 0: return
-            dt = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            self.cur.execute("UPDATE products SET stock_qty=stock_qty-? WHERE name=?", (q, p))
-            self.cur.execute("INSERT INTO stock_movements (date,prod_name,qty,type,reason_or_ref,user) VALUES (?,?,?,?,?,?)", (dt, p, q, "OFFERT", ero.get(), self.user['name']))
-            self.conn.commit(); self.ref_stock(); eqo.delete(0, 'end'); ero.delete(0, 'end')
-            messagebox.showinfo("OK", "Cadeau enregistré.")
-            
-        ctk.CTkButton(c4, text="VALIDER L'OFFRE", height=40, fg_color=C_INFO, command=offer).pack(pady=10, fill="x")
-
-        self.cbs = [cb, cp, co]
+    
         
         # ==========================================
         # LE NOUVEAU TABLEAU DE TRAÇABILITÉ (Treeview)
@@ -802,20 +702,99 @@ class DrinkManagerEnterprise(ctk.CTk):
             ax.bar([x[0][:10] for x in data], [x[1] for x in data], color=C_ACC)
             ax.set_title("TOP 5 PRODUITS VENDUS")
             FigureCanvasTkAgg(fig, master=self.stats_container).get_tk_widget().pack(fill="both", expand=True)
-
-    # =============================================================================
-    # CONFIGURATION ET JOURNAL
+# =============================================================================
+    # CONFIGURATION ET PARAMÈTRES (RESTAURATION DES 5 SOUS-ONGLETS V31)
     # =============================================================================
     def init_cfg(self):
-        f = ctk.CTkFrame(self.t_cfg); f.pack(fill="both", expand=True, padx=20, pady=20)
-        ctk.CTkLabel(f, text="NOM DU MAGASIN").pack(pady=10)
-        en = ctk.CTkEntry(f, width=400, height=50, font=self.f_norm, justify="center")
-        en.insert(0, self.store_name); en.pack()
-        def save_cfg():
-            self.cur.execute("UPDATE settings SET valeur=? WHERE cle='store_name'", (en.get().upper(),))
-            self.conn.commit(); messagebox.showinfo("OK", "Enregistré !")
-        ctk.CTkButton(f, text="SAUVEGARDER", height=50, command=save_cfg).pack(pady=20)
-        ctk.CTkButton(f, text="💾 BACKUP BASE DE DONNÉES", height=50, fg_color=C_OK, command=self.db_backup).pack(pady=10)
+        # Création du conteneur de sous-onglets
+        tab_cfg = ctk.CTkTabview(self.t_cfg)
+        tab_cfg.pack(fill="both", expand=True, padx=10, pady=10)
+        tab_cfg._segmented_button.configure(font=self.f_norm, height=50)
+        
+        # Ajout des 5 onglets officiels
+        t_app = tab_cfg.add("APPARENCE")
+        t_sys = tab_cfg.add("SYSTÈME")
+        t_prn = tab_cfg.add("IMPRIMANTE")
+        t_tl  = tab_cfg.add("OUTILS")
+        t_ct  = tab_cfg.add("CONTACT")
+        
+        # --- 1. SOUS-ONGLET : APPARENCE ---
+        ctk.CTkLabel(t_app, text="PERSONNALISATION VISUELLE", font=self.f_title).pack(pady=20)
+        ctk.CTkLabel(t_app, text="Taille de police globale (Recommandé: 18)", font=self.f_small).pack(pady=5)
+        self.cb_font = ctk.CTkComboBox(t_app, values=["14", "16", "18", "20", "22", "24"], height=45, font=self.f_norm)
+        self.cb_font.set(str(self.font_sz))
+        self.cb_font.pack(pady=10)
+        
+        ctk.CTkLabel(t_app, text="Thème de l'interface", font=self.f_small).pack(pady=5)
+        self.cb_theme = ctk.CTkComboBox(t_app, values=["System", "Dark", "Light"], height=45, font=self.f_norm)
+        # On récupère le thème actuel en BDD
+        try:
+            curr_theme = self.cur.execute("SELECT valeur FROM settings WHERE cle='theme'").fetchone()[0]
+            self.cb_theme.set(curr_theme)
+        except: self.cb_theme.set("System")
+        self.cb_theme.pack(pady=10)
+
+        def save_app_settings():
+            self.cur.execute("UPDATE settings SET valeur=? WHERE cle='font_size'", (self.cb_font.get(),))
+            self.cur.execute("UPDATE settings SET valeur=? WHERE cle='theme'", (self.cb_theme.get(),))
+            self.conn.commit()
+            messagebox.showinfo("APPARENCE", "Modifications enregistrées !\nVeuillez redémarrer pour appliquer.")
+        ctk.CTkButton(t_app, text="💾 SAUVEGARDER LE STYLE", height=50, fg_color=C_INFO, command=save_app_settings).pack(pady=30)
+
+        # --- 2. SOUS-ONGLET : SYSTÈME ---
+        ctk.CTkLabel(t_sys, text="PARAMÈTRES DE L'ÉTABLISSEMENT", font=self.f_title).pack(pady=20)
+        ctk.CTkLabel(t_sys, text="Nom du Commerce (En-tête ticket)", font=self.f_small).pack(pady=5)
+        self.en_store = ctk.CTkEntry(t_sys, width=400, height=50, font=self.f_norm, justify="center")
+        self.en_store.insert(0, self.store_name)
+        self.en_store.pack(pady=10)
+        
+        ctk.CTkLabel(t_sys, text="Seuil d'alerte Stock Bas", font=self.f_small).pack(pady=5)
+        self.en_alert = ctk.CTkEntry(t_sys, width=150, height=50, font=self.f_norm, justify="center")
+        self.en_alert.insert(0, str(self.alert_thr))
+        self.en_alert.pack(pady=10)
+
+        def save_sys_settings():
+            self.cur.execute("UPDATE settings SET valeur=? WHERE cle='store_name'", (self.en_store.get().upper(),))
+            self.cur.execute("UPDATE settings SET valeur=? WHERE cle='stock_alert'", (self.en_alert.get(),))
+            self.conn.commit()
+            messagebox.showinfo("SYSTÈME", "Paramètres système mis à jour.")
+        ctk.CTkButton(t_sys, text="💾 ENREGISTRER SYSTÈME", height=50, fg_color=C_OK, command=save_sys_settings).pack(pady=30)
+
+        # --- 3. SOUS-ONGLET : IMPRIMANTE ---
+        ctk.CTkLabel(t_prn, text="CONFIGURATION IMPRESSION", font=self.f_title).pack(pady=20)
+        printers = PrinterManager.get_printers()
+        self.cb_prn = ctk.CTkComboBox(t_prn, values=printers, width=400, height=50, font=self.f_norm)
+        self.cb_prn.set(self.sel_print)
+        self.cb_prn.pack(pady=10)
+        
+        def save_printer_choice():
+            self.cur.execute("UPDATE settings SET valeur=? WHERE cle='printer'", (self.cb_prn.get(),))
+            self.conn.commit()
+            messagebox.showinfo("IMPRIMANTE", f"Par défaut : {self.cb_prn.get()}")
+        ctk.CTkButton(t_prn, text="✅ DÉFINIR PAR DÉFAUT", height=50, command=save_printer_choice).pack(pady=30)
+
+        # --- 4. SOUS-ONGLET : OUTILS ---
+        ctk.CTkLabel(t_tl, text="MAINTENANCE ET SÉCURITÉ", font=self.f_title).pack(pady=20)
+        ctk.CTkButton(t_tl, text="📂 DOSSIER SOURCE", height=55, command=lambda: os.startfile(os.getcwd())).pack(pady=10, fill="x", padx=100)
+        ctk.CTkButton(t_tl, text="💾 BACKUP BASE DE DONNÉES", height=55, fg_color=C_OK, command=self.db_backup).pack(pady=10, fill="x", padx=100)
+        ctk.CTkButton(t_tl, text="🔄 VÉRIFIER MISE À JOUR", height=55, fg_color=C_INFO, command=UpdateManager.check_update).pack(pady=10, fill="x", padx=100)
+        
+        # --- 5. SOUS-ONGLET : CONTACT ---
+        ctk.CTkLabel(t_ct, text="SUPPORT TECHNIQUE", font=self.f_title).pack(pady=20)
+        ctk.CTkLabel(t_ct, text=f"👤 DÉVELOPPEUR : {DEV_NAME}", font=self.f_norm).pack(pady=5)
+        ctk.CTkLabel(t_ct, text=f"📧 EMAIL : {DEV_EMAIL}", font=self.f_norm).pack(pady=5)
+        ctk.CTkLabel(t_ct, text=f"📞 TÉL : {DEV_PHONE}", font=self.f_norm).pack(pady=5)
+        ctk.CTkButton(t_ct, text="🌐 VOIR GITHUB", fg_color=C_SEC, command=lambda: webbrowser.open("https://github.com/doufall")).pack(pady=20)
+        
+        info_frame = ctk.CTkFrame(t_ct, fg_color="transparent")
+        info_frame.pack(pady=10)
+        
+        ctk.CTkLabel(info_frame, text=f"👤 DÉVELOPPEUR : {DEV_NAME}", font=self.f_norm).pack(pady=5)
+        ctk.CTkLabel(info_frame, text=f"📧 EMAIL : {DEV_EMAIL}", font=self.f_norm).pack(pady=5)
+        ctk.CTkLabel(info_frame, text=f"📞 TÉL : {DEV_PHONE}", font=self.f_norm).pack(pady=5)
+        ctk.CTkLabel(info_frame, text="📍 LIBREVILLE, GABON", font=self.f_norm).pack(pady=5)
+        
+        ctk.CTkButton(t_ct, text="🌐 VOIR LE SITE WEB", fg_color=C_SEC, command=lambda: webbrowser.open("https://github.com/doufall")).pack(pady=20)
 
     def init_logs(self):
         f = ctk.CTkFrame(self.t_logs); f.pack(fill="both", expand=True, padx=10, pady=10)
