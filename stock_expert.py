@@ -21,7 +21,7 @@ from datetime import datetime, timedelta
 # CONFIGURATION GLOBALE
 # =============================================================================
 APP_NAME = "DRINK MANAGER PRO"
-APP_VERSION = "v31.0" 
+APP_VERSION = "v36.0" 
 DB_FILE = "enterprise_data.db"
 PORT_LOCK = 65432 
 
