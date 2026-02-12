@@ -1,4 +1,3 @@
-#%%
 import customtkinter as ctk
 from tkinter import messagebox, simpledialog, filedialog, ttk
 import sqlite3
@@ -21,7 +20,7 @@ from datetime import datetime, timedelta
 # CONFIGURATION GLOBALE
 # =============================================================================
 APP_NAME = "DRINK MANAGER PRO"
-APP_VERSION = "v37.0" 
+APP_VERSION = "v38.0" 
 DB_FILE = "enterprise_data.db"
 PORT_LOCK = 65432 
 
@@ -61,11 +60,10 @@ except: HAS_WIN32 = False
 # GESTION INSTANCE UNIQUE
 # =============================================================================
 def check_single_instance():
-    """Empêche d'ouvrir le logiciel deux fois."""
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.bind(('127.0.0.1', PORT_LOCK))
-        return s  # On retourne le socket pour le garder ouvert
+        return s 
     except socket.error:
         return None
 
@@ -104,7 +102,6 @@ class UpdateManager:
             messagebox.showinfo("TÉLÉCHARGEMENT", "Téléchargement en cours...\nNe touchez à rien.")
             urllib.request.urlretrieve(dynamic_url, new_exe_path)
             
-            # Exécution directe pour éviter le bug EOF
             cmd = f'cmd /c timeout /t 2 /nobreak > NUL & del "{current_exe}" & ren "{new_exe_name}" "{current_exe}" & start "" "{current_exe}"'
             subprocess.Popen(cmd, shell=True)
             sys.exit(0)
@@ -156,11 +153,8 @@ class MauricetteCalendar(ctk.CTkToplevel):
         self.title("DATE")
         self.geometry("400x450")
         self.attributes("-topmost", True)
-        
-        # --- REND LA FENÊTRE MODALE (Empêche de cliquer ailleurs) ---
         self.grab_set()
         self.focus_force()
-        
         self.cur = datetime.now()
         hf = ctk.CTkFrame(self); hf.pack(fill="x", padx=10, pady=10)
         ctk.CTkButton(hf, text="<", width=40, command=self.prev).pack(side="left")
@@ -202,18 +196,7 @@ class SecurityEngine:
 # =============================================================================
 # APPLICATION PRINCIPALE
 # =============================================================================
-#%%
 class DrinkManagerEnterprise(ctk.CTk):
-
-    def close(self):
-      if messagebox.askyesno("Quitter", "Voulez-vous vraiment quitter ?"):
-        try:
-            self.conn.close()
-        except:
-            pass
-        self.destroy()
-
-
     def __init__(self):
         super().__init__()
         self.title(f"{APP_NAME} | {APP_VERSION}")
@@ -247,7 +230,6 @@ class DrinkManagerEnterprise(ctk.CTk):
         if r and r[0] == p: return True
         messagebox.showerror("REFUSÉ", "Mot de passe incorrect."); return False
 
-    # --- BDD & CONFIG ---
     def init_db(self):
         tables = [
             "CREATE TABLE IF NOT EXISTS products (id INTEGER PRIMARY KEY, name TEXT UNIQUE, category TEXT, sell_price INT, buy_price INT, stock_qty INT, min_alert INT DEFAULT 5)",
@@ -260,8 +242,6 @@ class DrinkManagerEnterprise(ctk.CTk):
             "CREATE TABLE IF NOT EXISTS settings (cle TEXT PRIMARY KEY, valeur TEXT)"
         ]
         for q in tables: self.cur.execute(q)
-        
-        # --- MODIF: TAILLE POLICE PAR DEFAUT A 18 COMME DANS TA V31 ---
         defaults = [('store_name', 'MA BOUTIQUE'), ('license_key', ''), ('install_date', datetime.now().strftime("%Y-%m-%d")), ('theme', 'System'), ('font_family', 'Arial'), ('font_size', '18'), ('printer', ''), ('stock_alert', '5')]
         self.cur.executemany("INSERT OR IGNORE INTO settings VALUES (?,?)", defaults)
         self.cur.executemany("INSERT OR IGNORE INTO categories VALUES (?)", [('BOISSONS',), ('SNACKS',), ('DIVERS',)])
@@ -269,7 +249,6 @@ class DrinkManagerEnterprise(ctk.CTk):
         self.cur.execute("SELECT count(*) FROM staff WHERE role='admin'")
         if self.cur.fetchone()[0] == 0:
             self.cur.execute("INSERT INTO staff VALUES ('admin','admin','admin')")
-        
         self.conn.commit()
 
     def load_cfg(self):
@@ -277,18 +256,17 @@ class DrinkManagerEnterprise(ctk.CTk):
         d = dict(self.cur.fetchall())
         self.store_name = d.get('store_name', 'MA BOUTIQUE')
         self.font_fam = d.get('font_family', 'Arial')
-        self.font_sz = int(d.get('font_size', 18)) # Default bigger
+        self.font_sz = int(d.get('font_size', 18))
         self.alert_thr = int(d.get('stock_alert', 5))
         self.sel_print = d.get('printer', '')
         ctk.set_appearance_mode(d.get('theme', 'System'))
 
     def apply_style(self):
-        # --- POLICES PLUS GRANDES ---
-        self.f_title = (self.font_fam, int(self.font_sz * 2.0), "bold") # Titres
-        self.f_norm = (self.font_fam, int(self.font_sz * 1.2), "bold")  # Textes normaux
-        self.f_small = (self.font_fam, int(self.font_sz), "bold")       # Petits textes
-        self.f_btn = (self.font_fam, int(self.font_sz * 1.1), "bold")   # Boutons
-        # --- LICENSE ---
+        self.f_title = (self.font_fam, int(self.font_sz * 2.0), "bold")
+        self.f_norm = (self.font_fam, int(self.font_sz * 1.2), "bold")
+        self.f_small = (self.font_fam, int(self.font_sz), "bold")
+        self.f_btn = (self.font_fam, int(self.font_sz * 1.1), "bold")
+
     def check_lic(self):
         self.cur.execute("SELECT valeur FROM settings WHERE cle='license_key'")
         k = self.cur.fetchone()
@@ -319,23 +297,18 @@ class DrinkManagerEnterprise(ctk.CTk):
             self.conn.commit(); messagebox.showinfo("OK", f"Activé: {m}"); self.login()
         else: messagebox.showerror("NON", "Invalide")
 
-    # --- LOGIN ---
     def login(self):
         self.clear()
         f = ctk.CTkFrame(self, width=500, height=650); f.place(relx=0.5, rely=0.5, anchor="center")
         ctk.CTkLabel(f, text=self.store_name, font=self.f_title).pack(pady=(50, 30))
         if self.trial: ctk.CTkLabel(f, text="MODE ESSAI", text_color=C_WARN, font=self.f_small).pack()
-        
         self.eu = ctk.CTkEntry(f, placeholder_text="Utilisateur", width=350, height=50, font=self.f_norm)
         self.eu.pack(pady=15)
-        
         self.ep = ctk.CTkEntry(f, placeholder_text="Mot de passe", show="*", width=350, height=50, font=self.f_norm)
         self.ep.pack(pady=15)
-        
         def toggle_login_pass():
             if self.ep.cget('show') == '*': self.ep.configure(show='')
             else: self.ep.configure(show='*')
-        
         ctk.CTkCheckBox(f, text="👁️ Voir le mot de passe", font=self.f_small, command=toggle_login_pass).pack(pady=10)
         ctk.CTkButton(f, text="SE CONNECTER", width=350, height=60, font=self.f_norm, command=self.do_log).pack(pady=30)
         ctk.CTkLabel(f, text=f"Besoin d'aide ? {DEV_PHONE}", text_color=C_INFO, font=("Arial", 12)).pack(side="bottom", pady=20)
@@ -346,322 +319,276 @@ class DrinkManagerEnterprise(ctk.CTk):
         if r: self.user = {"name": u, "role": r[0]}; self.dash()
         else: messagebox.showerror("ERREUR", "Nom d'utilisateur ou mot de passe incorrect.")
 
-   # =============================================================================
-    # TABLEAU DE BORD PRINCIPAL
+    # =============================================================================
+    # DASHBOARD
     # =============================================================================
     def dash(self):
-        # 1. Nettoyage de l'écran précédent (Login)
         self.clear()
-        
-        # 2. Zoom et Style
-        ctk.set_widget_scaling(1.1) 
-        
-        # 3. Création du conteneur d'onglets (Tabview)
-        # On l'assigne à self.main_tabs pour être sûr de sa référence
+        ctk.set_widget_scaling(1.1)
         self.main_tabs = ctk.CTkTabview(self, height=800)
         self.main_tabs.pack(fill="both", expand=True, padx=10, pady=10)
-        self.main_tabs._segmented_button.configure(font=self.f_norm, height=50) 
+        self.main_tabs._segmented_button.configure(font=self.f_norm, height=50)
 
-        # 4. AJOUT DES ONGLETS (L'ordre est important)
         self.t_pos = self.main_tabs.add("CAISSE")
         self.t_inv = self.main_tabs.add("STOCK")
-        
-        # 5. ONGLETS ADMINISTRATEUR
+
         if self.user["role"] == "admin":
             self.t_stf = self.main_tabs.add("EQUIPE")
             self.t_stat = self.main_tabs.add("RAPPORTS")
             self.t_cfg = self.main_tabs.add("CONFIG")
             self.t_logs = self.main_tabs.add("JOURNAL")
             
-            # Initialisation des contenus Admin
-            # On utilise try/except pour qu'une erreur dans un onglet ne bloque pas les autres
             try: self.init_staff()
-            except Exception as e: print(f"Erreur Staff: {e}")
-            
+            except: pass
             try: self.init_stats()
-            except Exception as e: print(f"Erreur Stats: {e}")
-            
+            except: pass
             try: self.init_cfg()
-            except Exception as e: print(f"Erreur Config: {e}")
-            
+            except: pass
             try: self.init_logs()
-            except Exception as e: print(f"Erreur Logs: {e}")
-            
-        # 6. INITIALISATION DES CONTENUS STANDARDS
-        # Ces deux fonctions DOIVENT être appelées en dernier
-        self.init_pos()   # Remplit la Caisse
-        self.init_stock() # Remplit le Stock (C'est ici que tes éléments apparaîtront)
-        
-        # Forcer la mise à jour visuelle
+            except: pass
+
+        self.init_pos()
+        self.init_stock()
         self.update_idletasks()
 
-    # --- POS (CAISSE) ---
+    # --- POS ---
     def init_pos(self):
         self.t_pos.grid_columnconfigure(0, weight=3); self.t_pos.grid_columnconfigure(1, weight=1); self.t_pos.grid_rowconfigure(0, weight=1)
-        
         lf = ctk.CTkFrame(self.t_pos); lf.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
         sf = ctk.CTkFrame(lf, height=60); sf.pack(fill="x", pady=5)
-        
         self.eps = ctk.CTkEntry(sf, placeholder_text="🔍 Chercher un produit...", height=50, font=self.f_norm)
         self.eps.pack(side="left", fill="x", expand=True, padx=5)
         self.eps.bind("<KeyRelease>", lambda e: self.ref_pos())
-        
         self.ecf = ctk.CTkComboBox(sf, values=["TOUT"] + [r[0] for r in self.cur.execute("SELECT name FROM categories")], height=50, font=self.f_norm, command=lambda x: self.ref_pos())
         self.ecf.pack(side="left", padx=5)
-        
         self.gp = ctk.CTkScrollableFrame(lf, fg_color="transparent"); self.gp.pack(fill="both", expand=True)
-        
         rf = ctk.CTkFrame(self.t_pos, fg_color=C_SEC); rf.grid(row=0, column=1, sticky="nsew", padx=5, pady=5)
         ctk.CTkLabel(rf, text="PANIER", font=self.f_title).pack(pady=10)
-        
         self.cv = ctk.CTkScrollableFrame(rf); self.cv.pack(fill="both", expand=True)
-        
         self.lt = ctk.CTkLabel(rf, text="TOTAL: 0 FCFA", font=("Arial", 30, "bold"), text_color=C_OK); self.lt.pack(pady=20)
-        
         ctk.CTkButton(rf, text="ENCAISSER (PAYER)", fg_color=C_OK, height=80, font=("Arial", 20, "bold"), command=self.pay).pack(fill="x", padx=10, pady=10)
         ctk.CTkButton(rf, text="VIDER PANIER", fg_color=C_ERR, height=50, font=self.f_norm, command=lambda: (self.cart.clear(), self.upd_cart())).pack(fill="x", padx=10, pady=5)
-        
         self.cat = "TOUT"; self.ref_pos()
-    # --- POS (FONCTIONS DE MISE À JOUR) ---
-      # --- POS (FONCTIONS DE MISE À JOUR) ---
+
     def ref_pos(self):
         for w in self.gp.winfo_children(): w.destroy()
         q = "SELECT name, sell_price, stock_qty FROM products WHERE name LIKE ?"
         p = [f"%{self.eps.get()}%"]
-        if self.ecf.get() != "TOUT": 
-            q += " AND category=?"
-            p.append(self.ecf.get())
-        
+        if self.ecf.get() != "TOUT": q += " AND category=?"; p.append(self.ecf.get())
         for n, pr, qt in self.cur.execute(q, p):
             c = C_PRIM if qt > self.alert_thr else (C_WARN if qt > 0 else "gray")
-            ctk.CTkButton(self.gp, text=f"{n}\n{pr} F\n({qt})", fg_color=c, width=160, height=120, font=("Arial", 14, "bold"), command=lambda x=n, y=pr, z=qt: self.add_c(x, y, z)).pack(side="left", padx=5, pady=5)
+            ctk.CTkButton(self.gp, text=f"{n}\n{pr} F\n(Stock: {qt})", fg_color=c, width=160, height=120, font=("Arial", 14, "bold"), command=lambda x=n, y=pr, z=qt: self.add_c(x, y, z)).pack(side="left", padx=5, pady=5)
 
-    # --- STOCK ET TRAÇABILITÉ (BLOC RÉPARÉ) ---
+    def add_c(self, n, p, mq):
+        if mq <= 0: return
+        cur = self.cart.get(n, {'q': 0, 'p': p})
+        if cur['q'] < mq: cur['q'] += 1; self.cart[n] = cur; self.upd_cart()
 
+    def upd_cart(self):
+        for w in self.cv.winfo_children(): w.destroy()
+        t = 0
+        for n, d in self.cart.items():
+            s = d['q'] * d['p']; t += s
+            r = ctk.CTkFrame(self.cv, height=50); r.pack(fill="x", pady=2)
+            ctk.CTkLabel(r, text=f"{n}", font=self.f_small, width=150, anchor="w").pack(side="left", padx=5)
+            ctk.CTkLabel(r, text=f"x{d['q']}", font=self.f_norm, text_color=C_WARN).pack(side="left", padx=5)
+            ctk.CTkButton(r, text="X", width=40, fg_color=C_ERR, command=lambda x=n: (self.cart.pop(x), self.upd_cart())).pack(side="right")
+            ctk.CTkLabel(r, text=f"{s} F", font=self.f_norm).pack(side="right", padx=10)
+        self.lt.configure(text=f"TOTAL: {t} FCFA")
 
-def get_prods(self):
-    """Retourne la liste des produits"""
-    self.cur.execute("SELECT name FROM products ORDER BY name")
-    return [r[0] for r in self.cur.fetchall()]
-
-def init_stock(self):
-
-    # ===============================
-    # ZONE FORMULAIRES
-    # ===============================
-    form_frame = ctk.CTkFrame(self.t_inv)
-    form_frame.pack(fill="x", padx=10, pady=10)
-
-    # --------- CREATION PRODUIT ----------
-    create_frame = ctk.CTkFrame(form_frame)
-    create_frame.pack(side="left", expand=True, fill="both", padx=5)
-
-    ctk.CTkLabel(create_frame, text="CRÉER PRODUIT", font=self.f_small).pack(pady=5)
-
-    self.stock_name = ctk.CTkEntry(create_frame, placeholder_text="Nom produit")
-    self.stock_name.pack(fill="x", pady=3)
-
-    self.stock_cat = ctk.CTkComboBox(
-        create_frame,
-        values=[r[0] for r in self.cur.execute("SELECT name FROM categories")]
-    )
-    self.stock_cat.pack(fill="x", pady=3)
-
-    self.stock_buy = ctk.CTkEntry(create_frame, placeholder_text="Prix Achat")
-    self.stock_buy.pack(fill="x", pady=3)
-
-    self.stock_sell = ctk.CTkEntry(create_frame, placeholder_text="Prix Vente")
-    self.stock_sell.pack(fill="x", pady=3)
-
-    def create_product():
-        if not self.ask_admin():
-            return
-
-        name = self.stock_name.get().strip().upper()
-        if not name:
-            return
-
-        try:
-            self.cur.execute("""
-                INSERT INTO products (name, category, buy_price, sell_price, stock_qty)
-                VALUES (?,?,?,?,0)
-            """, (
-                name,
-                self.stock_cat.get(),
-                self.safe_int(self.stock_buy.get()),
-                self.safe_int(self.stock_sell.get())
-            ))
-
+    def pay(self):
+        if not self.cart: return
+        tot = sum(d['q'] * d['p'] for d in self.cart.values())
+        w = ctk.CTkToplevel(self); w.geometry("500x600"); w.title("ENCAISSEMENT"); w.grab_set(); w.focus_force()
+        ctk.CTkLabel(w, text="TOTAL À PAYER", font=("Arial", 20)).pack(pady=(30, 5))
+        ctk.CTkLabel(w, text=f"{tot} FCFA", font=("Arial", 40, "bold"), text_color=C_OK).pack(pady=10)
+        ec = ctk.CTkEntry(w, justify="center", font=("Arial", 30), height=60, width=300); ec.pack(pady=10); ec.focus()
+        def val():
+            r = self.safe_int(ec.get())
+            if r < tot: messagebox.showerror("ERREUR", "Montant insuffisant !"); return
+            dt = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            self.cur.execute("INSERT INTO sales_header (date_time, total_price, user_name) VALUES (?,?,?)", (dt, tot, self.user['name']))
+            sid = self.cur.lastrowid
+            body = f"Date: {dt}\nTicket #{sid}\nCaissier: {self.user['name'].upper()}\n" + "-"*42 + "\n" + f"{'PRODUIT':<20} {'QTE':<5} {'TOTAL':>15}\n" + "-"*42 + "\n"
+            for n, d in self.cart.items():
+                self.cur.execute("INSERT INTO sales_lines (sale_id, prod_name, qty, unit_price) VALUES (?,?,?,?)", (sid, n, d['q'], d['p']))
+                self.cur.execute("UPDATE products SET stock_qty=stock_qty-? WHERE name=?", (d['q'], n))
+                self.cur.execute("INSERT INTO stock_movements (date,prod_name,qty,type,user) VALUES (?,?,?,?,?)", (dt, n, d['q'], "VENTE", self.user['name']))
+                line_total = d['q'] * d['p']
+                body += f"{n:<20} x{d['q']:<4} {line_total:>15}\n"
             self.conn.commit()
-            self.ref_stock()
-            self.stock_name.delete(0, "end")
-            messagebox.showinfo("OK", "Produit créé")
+            rendu = r - tot
+            body += "="*42 + "\n" + f"TOTAL : {tot} FCFA\n".center(42) + f"RECU : {r} FCFA\nRENDU : {rendu} FCFA\n" + "="*42
+            if self.sel_print:
+                PrinterManager.print_ticket(self.sel_print, f"{self.store_name.center(42)}\nTicket Client\n"+body)
+                time.sleep(1.5)
+                PrinterManager.print_ticket(self.sel_print, f"{self.store_name.center(42)}\nTicket Caisse\n"+body)
+            messagebox.showinfo("SUCCÈS", f"✅ Paiement validé !\n\n➡️ RENDRE : {rendu} FCFA")
+            self.cart = {}; self.upd_cart(); self.ref_pos(); w.destroy()
+        ctk.CTkButton(w, text="VALIDER LE PAIEMENT", height=80, width=300, fg_color=C_OK, font=("Arial", 20, "bold"), command=val).pack(pady=30)
 
-        except sqlite3.IntegrityError:
-            messagebox.showerror("Erreur", "Produit déjà existant")
+    # --- STOCK (CORRIGÉ) ---
+    def get_prods(self):
+        self.cur.execute("SELECT name FROM products ORDER BY name")
+        return [r[0] for r in self.cur.fetchall()]
 
-    ctk.CTkButton(create_frame, text="CRÉER", command=create_product).pack(pady=5, fill="x")
+    def init_stock(self):
+        form_frame = ctk.CTkFrame(self.t_inv); form_frame.pack(fill="x", padx=10, pady=10)
+        
+        # CREATE
+        cf = ctk.CTkFrame(form_frame); cf.pack(side="left", expand=True, fill="both", padx=5)
+        ctk.CTkLabel(cf, text="CRÉER PRODUIT", font=self.f_small).pack(pady=5)
+        self.stock_name = ctk.CTkEntry(cf, placeholder_text="Nom produit"); self.stock_name.pack(fill="x", pady=3)
+        self.stock_cat = ctk.CTkComboBox(cf, values=[r[0] for r in self.cur.execute("SELECT name FROM categories")]); self.stock_cat.pack(fill="x", pady=3)
+        self.stock_buy = ctk.CTkEntry(cf, placeholder_text="Prix Achat"); self.stock_buy.pack(fill="x", pady=3)
+        self.stock_sell = ctk.CTkEntry(cf, placeholder_text="Prix Vente"); self.stock_sell.pack(fill="x", pady=3)
+        def create_product():
+            if not self.ask_admin(): return
+            n = self.stock_name.get().strip().upper()
+            if not n: return
+            try:
+                self.cur.execute("INSERT INTO products (name, category, buy_price, sell_price, stock_qty) VALUES (?,?,?,?,0)", (n, self.stock_cat.get(), self.safe_int(self.stock_buy.get()), self.safe_int(self.stock_sell.get())))
+                self.conn.commit(); self.ref_stock(); self.stock_name.delete(0, "end"); messagebox.showinfo("OK", "Produit créé")
+            except: messagebox.showerror("Erreur", "Existe déjà")
+        ctk.CTkButton(cf, text="CRÉER", command=create_product).pack(pady=5, fill="x")
 
-    # --------- ENTREE STOCK ----------
-    entry_frame = ctk.CTkFrame(form_frame, border_color="green", border_width=2)
-    entry_frame.pack(side="left", expand=True, fill="both", padx=5)
+        # ENTRY
+        ef = ctk.CTkFrame(form_frame, border_color="green", border_width=2); ef.pack(side="left", expand=True, fill="both", padx=5)
+        ctk.CTkLabel(ef, text="ENTRÉE STOCK").pack(pady=5)
+        self.entry_product = ctk.CTkComboBox(ef, values=[]); self.entry_product.pack(fill="x", pady=3)
+        self.entry_qty = ctk.CTkEntry(ef, placeholder_text="Quantité"); self.entry_qty.pack(fill="x", pady=3)
+        def add_stock():
+            if not self.ask_admin(): return
+            q = self.safe_int(self.entry_qty.get()); p = self.entry_product.get()
+            if q > 0 and p:
+                self.cur.execute("UPDATE products SET stock_qty=stock_qty+? WHERE name=?", (q, p))
+                self.cur.execute("INSERT INTO stock_movements (date, prod_name, qty, type, user) VALUES (?,?,?,?,?)", (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), p, q, "ENTREE", self.user["name"]))
+                self.conn.commit(); self.ref_stock(); self.entry_qty.delete(0, "end")
+        ctk.CTkButton(ef, text="VALIDER", command=add_stock).pack(pady=5, fill="x")
 
-    ctk.CTkLabel(entry_frame, text="ENTRÉE STOCK").pack(pady=5)
+        # LOSS
+        lf = ctk.CTkFrame(form_frame, border_color="red", border_width=2); lf.pack(side="left", expand=True, fill="both", padx=5)
+        ctk.CTkLabel(lf, text="PERTE").pack(pady=5)
+        self.loss_product = ctk.CTkComboBox(lf, values=[]); self.loss_product.pack(fill="x", pady=3)
+        self.loss_qty = ctk.CTkEntry(lf, placeholder_text="Quantité"); self.loss_qty.pack(fill="x", pady=3)
+        self.loss_reason = ctk.CTkEntry(lf, placeholder_text="Motif"); self.loss_reason.pack(fill="x", pady=3)
+        def remove_stock():
+            if not self.ask_admin(): return
+            q = self.safe_int(self.loss_qty.get()); p = self.loss_product.get()
+            if q > 0 and p:
+                self.cur.execute("UPDATE products SET stock_qty=stock_qty-? WHERE name=?", (q, p))
+                self.cur.execute("INSERT INTO stock_movements (date, prod_name, qty, type, reason_or_ref, user) VALUES (?,?,?,?,?,?)", (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), p, q, "PERTE", self.loss_reason.get(), self.user["name"]))
+                self.conn.commit(); self.ref_stock(); self.loss_qty.delete(0, "end")
+        ctk.CTkButton(lf, text="VALIDER PERTE", command=remove_stock).pack(pady=5, fill="x")
 
-    self.entry_product = ctk.CTkComboBox(entry_frame, values=[])
-    self.entry_product.pack(fill="x", pady=3)
-
-    self.entry_qty = ctk.CTkEntry(entry_frame, placeholder_text="Quantité")
-    self.entry_qty.pack(fill="x", pady=3)
-
-    def add_stock():
-        if not self.ask_admin():
-            return
-
-        qty = self.safe_int(self.entry_qty.get())
-        prod = self.entry_product.get()
-
-        if qty <= 0 or not prod:
-            return
-
-        self.cur.execute(
-            "UPDATE products SET stock_qty = stock_qty + ? WHERE name=?",
-            (qty, prod)
-        )
-
-        self.cur.execute("""
-            INSERT INTO stock_movements (date, prod_name, qty, type, user)
-            VALUES (?,?,?,?,?)
-        """, (
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            prod,
-            qty,
-            "ENTREE",
-            self.user["name"]
-        ))
-
-        self.conn.commit()
+        # TABLE
+        table_frame = ctk.CTkFrame(self.t_inv); table_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        cols = ("ID", "Date", "Utilisateur", "Type", "Produit", "Qté", "Motif")
+        self.tree = ttk.Treeview(table_frame, columns=cols, show="headings")
+        for col in cols: 
+            self.tree.heading(col, text=col)
+            self.tree.column(col, anchor="center", width=120)
+        self.tree.pack(fill="both", expand=True)
+        
+        bf = ctk.CTkFrame(self.t_inv); bf.pack(pady=5)
+        ctk.CTkButton(bf, text="ACTUALISER", command=self.ref_stock).pack(side="left", padx=10)
+        ctk.CTkButton(bf, text="EXPORT CSV", command=self.stock_export_csv).pack(side="left", padx=10)
         self.ref_stock()
-        self.entry_qty.delete(0, "end")
 
-    ctk.CTkButton(entry_frame, text="VALIDER", command=add_stock).pack(pady=5, fill="x")
+    def ref_stock(self):
+        prods = self.get_prods()
+        if hasattr(self, "entry_product"): self.entry_product.configure(values=prods)
+        if hasattr(self, "loss_product"): self.loss_product.configure(values=prods)
+        if hasattr(self, "tree"):
+            for i in self.tree.get_children(): self.tree.delete(i)
+            self.cur.execute("SELECT id, date, user, type, prod_name, qty, reason_or_ref FROM stock_movements ORDER BY id DESC LIMIT 200")
+            for r in self.cur.fetchall(): self.tree.insert("", "end", values=r)
 
-    # --------- PERTE ----------
-    loss_frame = ctk.CTkFrame(form_frame, border_color="red", border_width=2)
-    loss_frame.pack(side="left", expand=True, fill="both", padx=5)
-
-    ctk.CTkLabel(loss_frame, text="PERTE").pack(pady=5)
-
-    self.loss_product = ctk.CTkComboBox(loss_frame, values=[])
-    self.loss_product.pack(fill="x", pady=3)
-
-    self.loss_qty = ctk.CTkEntry(loss_frame, placeholder_text="Quantité")
-    self.loss_qty.pack(fill="x", pady=3)
-
-    self.loss_reason = ctk.CTkEntry(loss_frame, placeholder_text="Motif")
-    self.loss_reason.pack(fill="x", pady=3)
-
-    def remove_stock():
-        if not self.ask_admin():
-            return
-
-        qty = self.safe_int(self.loss_qty.get())
-        prod = self.loss_product.get()
-
-        if qty <= 0 or not prod:
-            return
-
-        self.cur.execute(
-            "UPDATE products SET stock_qty = stock_qty - ? WHERE name=?",
-            (qty, prod)
-        )
-
-        self.cur.execute("""
-            INSERT INTO stock_movements
-            (date, prod_name, qty, type, reason_or_ref, user)
-            VALUES (?,?,?,?,?,?)
-        """, (
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            prod,
-            qty,
-            "PERTE",
-            self.loss_reason.get(),
-            self.user["name"]
-        ))
-
-        self.conn.commit()
-        self.ref_stock()
-        self.loss_qty.delete(0, "end")
-
-    ctk.CTkButton(loss_frame, text="VALIDER PERTE", command=remove_stock).pack(pady=5, fill="x")
-
-    # ===============================
-    # TABLEAU TRAÇABILITÉ
-    # ===============================
-    table_frame = ctk.CTkFrame(self.t_inv)
-    table_frame.pack(fill="both", expand=True, padx=10, pady=10)
-
-    cols = ("ID", "Date", "Utilisateur", "Type", "Produit", "Qté", "Motif")
-
-    self.tree = ttk.Treeview(table_frame, columns=cols, show="headings")
-
-    for col in cols:
-        self.tree.heading(col, text=col)
-        self.tree.column(col, anchor="center", width=120)
-
-    self.tree.pack(fill="both", expand=True)
-
-    # Boutons
-    bottom_frame = ctk.CTkFrame(self.t_inv)
-    bottom_frame.pack(pady=5)
-
-    ctk.CTkButton(bottom_frame, text="ACTUALISER", command=self.ref_stock).pack(side="left", padx=10)
-    ctk.CTkButton(bottom_frame, text="EXPORT CSV", command=self.stock_export_csv).pack(side="left", padx=10)
-
-    self.ref_stock()
-
-
-def ref_stock(self):
-
-    products = self.get_prods()
-
-    if hasattr(self, "entry_product"):
-        self.entry_product.configure(values=products)
-
-    if hasattr(self, "loss_product"):
-        self.loss_product.configure(values=products)
-
-    if hasattr(self, "tree"):
-        for item in self.tree.get_children():
-            self.tree.delete(item)
-
-        self.cur.execute("""
-            SELECT id, date, user, type, prod_name, qty, reason_or_ref
-            FROM stock_movements
-            ORDER BY id DESC
-            LIMIT 200
-        """)
-
-        for row in self.cur.fetchall():
-            self.tree.insert("", "end", values=row)
-
-
-
-def stock_export_csv(self):
-    path = filedialog.asksaveasfilename(defaultextension=".csv")
-    if not path:
-        return
-
-    ExportManager.to_csv(self.cur, "products", path)
-    messagebox.showinfo("OK", "Export terminé")
-
-
-    def sales_export_csv(self):
+    def stock_export_csv(self):
         p = filedialog.asksaveasfilename(defaultextension=".csv")
-        if p: 
-            ExportManager.to_csv(self.cur, "sales_header", p)
-            messagebox.showinfo("OK", "Ventes exportées en CSV avec succès.")
-    # =============================================================================
+        if p: ExportManager.to_csv(self.cur, "products", p); messagebox.showinfo("OK", "Export terminé")
+
+    # --- STAFF ---
+    def init_staff(self):
+        f = ctk.CTkFrame(self.t_stf); f.pack(fill="both", expand=True, padx=10, pady=10)
+        self.staff_tree = ttk.Treeview(f, columns=("Username", "Role"), show="headings")
+        self.staff_tree.heading("Username", text="Utilisateur"); self.staff_tree.heading("Role", text="Rôle")
+        self.staff_tree.pack(fill="both", expand=True, pady=10)
+        bf = ctk.CTkFrame(f); bf.pack(pady=10)
+        ctk.CTkButton(bf, text="AJOUTER", command=self.add_staff).pack(side="left", padx=5)
+        ctk.CTkButton(bf, text="SUPPRIMER", fg_color=C_ERR, command=self.del_staff).pack(side="left", padx=5)
+        self.refresh_staff()
+
+    def refresh_staff(self):
+        for i in self.staff_tree.get_children(): self.staff_tree.delete(i)
+        self.cur.execute("SELECT username, role FROM staff")
+        for r in self.cur.fetchall(): self.staff_tree.insert("", "end", values=r)
+
+    def add_staff(self):
+        u = simpledialog.askstring("USER", "Nom :"); p = simpledialog.askstring("PASS", "Mdp :")
+        if u and p:
+            try: self.cur.execute("INSERT INTO staff VALUES (?,?,?)", (u.lower(), p, "caissier")); self.conn.commit(); self.refresh_staff()
+            except: messagebox.showerror("Err", "Existe déjà")
+
+    def del_staff(self):
+        if not self.staff_tree.selection(): return
+        u = self.staff_tree.item(self.staff_tree.selection()[0])["values"][0]
+        if u != "admin" and messagebox.askyesno("Sur?", f"Supprimer {u}?"):
+            self.cur.execute("DELETE FROM staff WHERE username=?", (u,)); self.conn.commit(); self.refresh_staff()
+
+    # --- STATS ---
+    def init_stats(self):
+        f = ctk.CTkFrame(self.t_stat); f.pack(fill="both", expand=True, padx=10, pady=10)
+        qf = ctk.CTkFrame(f); qf.pack(fill="x", pady=5)
+        r1 = ctk.CTkFrame(qf, fg_color="transparent"); r1.pack(fill="x", pady=2)
+        def low_stk():
+            self.cur.execute("SELECT name, stock_qty FROM products WHERE stock_qty <= ?", (self.alert_thr,))
+            msg = "\n".join([f"{r[0]}: {r[1]}" for r in self.cur.fetchall()]) or "RAS"
+            messagebox.showinfo("Stock Bas", msg)
+        ctk.CTkButton(r1, text="📉 STOCK BAS", height=50, fg_color=C_ERR, command=low_stk).pack(side="left", fill="x", expand=True, padx=2)
+        def ca_mois():
+            m = datetime.now().strftime("%Y-%m")
+            self.cur.execute("SELECT SUM(total_price) FROM sales_header WHERE date_time LIKE ?", (m+"%",))
+            messagebox.showinfo("CA", f"CA Mois: {self.cur.fetchone()[0] or 0}")
+        ctk.CTkButton(r1, text="💰 CA MOIS", height=50, fg_color=C_OK, command=ca_mois).pack(side="left", fill="x", expand=True, padx=2)
+        
+        self.stats_container = ctk.CTkFrame(f); self.stats_container.pack(fill="both", expand=True, pady=10)
+        self.draw_stats()
+
+    def draw_stats(self):
+        if not HAS_PLOT: return
+        for w in self.stats_container.winfo_children(): w.destroy()
+        fig, ax = plt.subplots(figsize=(6, 4)); fig.patch.set_facecolor('#2b2b2b'); plt.style.use('dark_background')
+        self.cur.execute("SELECT prod_name, SUM(qty) as s FROM sales_lines GROUP BY prod_name ORDER BY s DESC LIMIT 5")
+        data = self.cur.fetchall()
+        if data:
+            ax.bar([x[0][:10] for x in data], [x[1] for x in data], color=C_ACC)
+            FigureCanvasTkAgg(fig, master=self.stats_container).get_tk_widget().pack(fill="both", expand=True)
+
+    # --- CONFIG ---
+    def init_cfg(self):
+        t = ctk.CTkTabview(self.t_cfg); t.pack(fill="both", expand=True, padx=10, pady=10)
+        t1 = t.add("INFOS"); t2 = t.add("OUTILS")
+        ctk.CTkLabel(t1, text="NOM DU COMMERCE").pack()
+        en = ctk.CTkEntry(t1); en.insert(0, self.store_name); en.pack()
+        def save(): self.cur.execute("UPDATE settings SET valeur=? WHERE cle='store_name'", (en.get(),)); self.conn.commit()
+        ctk.CTkButton(t1, text="SAUVEGARDER", command=save).pack(pady=10)
+        ctk.CTkButton(t2, text="BACKUP DB", command=self.db_backup).pack(pady=20)
+
+    def init_logs(self):
+        pass # Placeholder pour logs si besoin
+
+    def db_backup(self):
+        p = filedialog.asksaveasfilename(defaultextension=".db")
+        if p: shutil.copy2(DB_FILE, p); messagebox.showinfo("OK", "Sauvegardé")
+
+    def close(self):
+        if messagebox.askyesno("QUITTER", "Fermer ?"): self.conn.close(); self.destroy()
+
+if __name__ == "__main__":
+    if check_single_instance(): DrinkManagerEnterprise().mainloop()
+
+# =============================================================================
     # GESTION ÉQUIPE (STAFF)
     # =============================================================================
     def init_staff(self):
@@ -710,64 +637,65 @@ def stock_export_csv(self):
             self.conn.commit(); self.refresh_staff()
 
     # =============================================================================
-    # RAPPORTS ET STATISTIQUES (DESIGN V31 FINAL)
+    # RAPPORTS ET STATISTIQUES (VERSION COMPLÈTE V31)
     # =============================================================================
     def init_stats(self):
         f = ctk.CTkFrame(self.t_stat); f.pack(fill="both", expand=True, padx=10, pady=10)
         
-        # ZONE 1: BOUTONS DE CALCUL RAPIDE
+        # ZONE 1: INDICATEURS CLÉS
         qf = ctk.CTkFrame(f); qf.pack(fill="x", pady=5)
-        ctk.CTkLabel(qf, text="📊 PERFORMANCE ET DIAGNOSTIC", font=self.f_norm, text_color=C_INFO).pack(pady=10)
+        ctk.CTkLabel(qf, text="📊 TABLEAU DE BORD FINANCIER & STOCK", font=self.f_norm, text_color=C_INFO).pack(pady=10)
         
-        # LIGNE 1 : Argent et Alertes
+        # LIGNE 1
         r1 = ctk.CTkFrame(qf, fg_color="transparent"); r1.pack(fill="x", pady=2)
         
         def low_stk():
             self.cur.execute("SELECT name, stock_qty FROM products WHERE stock_qty <= ?", (self.alert_thr,))
             res = self.cur.fetchall()
-            msg = "✅ Stock OK" if not res else "⚠️ ALERTE RUPTURE :\n\n" + "\n".join([f"- {r[0]} ({r[1]})" for r in res])
-            messagebox.showwarning("STOCK", msg)
-        ctk.CTkButton(r1, text="📉 STOCK BAS", height=55, fg_color=C_ERR, command=low_stk).pack(side="left", fill="x", expand=True, padx=2)
+            msg = "✅ Stock OK" if not res else "⚠️ RUPTURE :\n\n" + "\n".join([f"- {r[0]} ({r[1]})" for r in res])
+            messagebox.showwarning("ALERTES", msg)
+        ctk.CTkButton(r1, text="📉 STOCK BAS", height=50, fg_color=C_ERR, command=low_stk).pack(side="left", fill="x", expand=True, padx=2)
         
         def ca_month():
             m = datetime.now().strftime("%Y-%m")
             self.cur.execute("SELECT SUM(total_price) FROM sales_header WHERE date_time LIKE ?", (m+"%",))
             r = self.cur.fetchone()[0] or 0
-            messagebox.showinfo("CA MOIS", f"💰 Chiffre d'Affaire ({m}) :\n\n{r} FCFA")
-        ctk.CTkButton(r1, text="💰 CA DU MOIS", height=55, fg_color=C_OK, command=ca_month).pack(side="left", fill="x", expand=True, padx=2)
+            messagebox.showinfo("CA MOIS", f"💰 CA du mois : {r} FCFA")
+        ctk.CTkButton(r1, text="💰 CA MOIS", height=50, fg_color=C_OK, command=ca_month).pack(side="left", fill="x", expand=True, padx=2)
 
         def profit_calc():
             self.cur.execute("SELECT SUM((p.sell_price - p.buy_price) * sl.qty) FROM sales_lines sl JOIN products p ON sl.prod_name = p.name")
             res = self.cur.fetchone()[0] or 0
-            messagebox.showinfo("BÉNÉFICE", f"💎 Bénéfice total estimé :\n\n+{res} FCFA")
-        ctk.CTkButton(r1, text="💎 BÉNÉFICE", height=55, fg_color="#8e44ad", command=profit_calc).pack(side="left", fill="x", expand=True, padx=2)
+            messagebox.showinfo("BÉNÉFICE", f"💎 Marge estimée : {res} FCFA")
+        ctk.CTkButton(r1, text="💎 BÉNÉFICE", height=50, fg_color="#8e44ad", command=profit_calc).pack(side="left", fill="x", expand=True, padx=2)
 
-        # LIGNE 2 : Valeurs et Tops (AJOUT V31.0)
+        # LIGNE 2
         r2 = ctk.CTkFrame(qf, fg_color="transparent"); r2.pack(fill="x", pady=2)
-
+        
         def val_stock():
             self.cur.execute("SELECT SUM(stock_qty * buy_price) FROM products")
             res = self.cur.fetchone()[0] or 0
-            messagebox.showinfo("VALEUR STOCK", f"🏦 Valeur marchande en stock :\n\n{res} FCFA")
-        ctk.CTkButton(r2, text="🏦 VALEUR STOCK", height=55, fg_color="#2980b9", command=val_stock).pack(side="left", fill="x", expand=True, padx=2)
+            messagebox.showinfo("VALEUR STOCK", f"🏦 Valeur Marchande : {res} FCFA")
+        ctk.CTkButton(r2, text="🏦 VALEUR STOCK", height=50, fg_color="#2980b9", command=val_stock).pack(side="left", fill="x", expand=True, padx=2)
 
-        def top_prod_msg():
+        def top_prod():
             self.cur.execute("SELECT prod_name, SUM(qty) as s FROM sales_lines GROUP BY prod_name ORDER BY s DESC LIMIT 1")
             r = self.cur.fetchone()
-            msg = f"🏆 Produit Champion :\n\n{r[0]} ({r[1]} ventes)" if r else "Aucune vente"
-            messagebox.showinfo("TOP PRODUIT", msg)
-        ctk.CTkButton(r2, text="🏆 TOP PRODUIT", height=55, fg_color=C_WARN, command=top_prod_msg).pack(side="left", fill="x", expand=True, padx=2)
+            msg = f"🏆 Top Produit : {r[0]} ({r[1]} ventes)" if r else "Aucune vente"
+            messagebox.showinfo("TOP VENTES", msg)
+        ctk.CTkButton(r2, text="🏆 TOP PRODUIT", height=50, fg_color=C_WARN, command=top_prod).pack(side="left", fill="x", expand=True, padx=2)
 
         def top_vendeur():
-            self.cur.execute("SELECT user_name, SUM(total_price) as tot FROM sales_header GROUP BY user_name ORDER BY tot DESC LIMIT 1")
+            self.cur.execute("SELECT user_name, SUM(total_price) FROM sales_header GROUP BY user_name ORDER BY 2 DESC LIMIT 1")
             r = self.cur.fetchone()
-            msg = f"🥇 Meilleur Vendeur :\n\n{str(r[0]).upper()} ({r[1]} FCFA)" if r else "Pas de données"
+            msg = f"🥇 Meilleur Vendeur : {str(r[0]).upper()} ({r[1]} F)" if r else "Néant"
             messagebox.showinfo("STAFF", msg)
-        ctk.CTkButton(r2, text="🥇 TOP VENDEUR", height=55, fg_color="#f39c12", command=top_vendeur).pack(side="left", fill="x", expand=True, padx=2)
+        ctk.CTkButton(r2, text="🥇 TOP VENDEUR", height=50, fg_color="#f39c12", command=top_vendeur).pack(side="left", fill="x", expand=True, padx=2)
 
-        # ZONE 2: IMPRESSION ET ÉTATS PHYSIQUES
+        # ZONE IMPRESSION
         rf = ctk.CTkFrame(f); rf.pack(fill="x", pady=10)
         ctk.CTkLabel(rf, text="🖨️ IMPRESSIONS", font=("Arial", 14, "bold")).pack(side="left", padx=10)
+        
         d1 = ctk.CTkEntry(rf, width=120, height=40); d1.pack(side="left", padx=2)
         ctk.CTkButton(rf, text="📅", width=40, command=lambda: MauricetteCalendar(self, lambda d: (d1.delete(0, 'end'), d1.insert(0, d)))).pack(side="left")
         d2 = ctk.CTkEntry(rf, width=120, height=40); d2.pack(side="left", padx=2)
@@ -781,7 +709,7 @@ def stock_export_csv(self):
             t = f"RECAP DU {d1.get()} AU {d2.get()}\n" + "="*30 + "\n"
             for r in rows: t += f"{r[0]}: {r[1]} | {r[2]}F\n"
             messagebox.showinfo("RAPPORT", t)
-        ctk.CTkButton(rf, text="RÉCAP PÉRIODE", height=40, command=rep_per).pack(side="left", padx=10)
+        ctk.CTkButton(rf, text="RÉCAP PÉRIODE", height=40, command=rep_per).pack(side="left", padx=5)
         
         def ticket_z():
             today = datetime.now().strftime("%Y-%m-%d")
@@ -804,7 +732,7 @@ def stock_export_csv(self):
             messagebox.showinfo("STOCK", t)
         ctk.CTkButton(rf, text="📦 ÉTAT STOCK", height=40, fg_color=C_INFO, command=etat_stock).pack(side="left", padx=5)
 
-        # ZONE 3: GRAPHIQUES
+        # GRAPHIQUES
         self.stats_container = ctk.CTkFrame(f); self.stats_container.pack(fill="both", expand=True, pady=10)
         self.draw_stats()
 
@@ -818,100 +746,74 @@ def stock_export_csv(self):
             ax.bar([x[0][:10] for x in data], [x[1] for x in data], color=C_ACC)
             ax.set_title("TOP 5 PRODUITS VENDUS")
             FigureCanvasTkAgg(fig, master=self.stats_container).get_tk_widget().pack(fill="both", expand=True)
-# =============================================================================
-    # CONFIGURATION ET PARAMÈTRES (RESTAURATION DES 5 SOUS-ONGLETS V31)
+
+    # =============================================================================
+    # CONFIGURATION (AVEC LES 5 ONGLETS)
     # =============================================================================
     def init_cfg(self):
-        # Création du conteneur de sous-onglets
         tab_cfg = ctk.CTkTabview(self.t_cfg)
         tab_cfg.pack(fill="both", expand=True, padx=10, pady=10)
         tab_cfg._segmented_button.configure(font=self.f_norm, height=50)
         
-        # Ajout des 5 onglets officiels
         t_app = tab_cfg.add("APPARENCE")
         t_sys = tab_cfg.add("SYSTÈME")
         t_prn = tab_cfg.add("IMPRIMANTE")
         t_tl  = tab_cfg.add("OUTILS")
         t_ct  = tab_cfg.add("CONTACT")
         
-        # --- 1. SOUS-ONGLET : APPARENCE ---
+        # 1. APPARENCE
         ctk.CTkLabel(t_app, text="PERSONNALISATION VISUELLE", font=self.f_title).pack(pady=20)
-        ctk.CTkLabel(t_app, text="Taille de police globale (Recommandé: 18)", font=self.f_small).pack(pady=5)
-        self.cb_font = ctk.CTkComboBox(t_app, values=["14", "16", "18", "20", "22", "24"], height=45, font=self.f_norm)
+        self.cb_font = ctk.CTkComboBox(t_app, values=["14", "16", "18", "20", "22"], height=45, font=self.f_norm)
         self.cb_font.set(str(self.font_sz))
         self.cb_font.pack(pady=10)
-        
-        ctk.CTkLabel(t_app, text="Thème de l'interface", font=self.f_small).pack(pady=5)
         self.cb_theme = ctk.CTkComboBox(t_app, values=["System", "Dark", "Light"], height=45, font=self.f_norm)
-        # On récupère le thème actuel en BDD
-        try:
-            curr_theme = self.cur.execute("SELECT valeur FROM settings WHERE cle='theme'").fetchone()[0]
-            self.cb_theme.set(curr_theme)
+        try: self.cb_theme.set(self.cur.execute("SELECT valeur FROM settings WHERE cle='theme'").fetchone()[0])
         except: self.cb_theme.set("System")
         self.cb_theme.pack(pady=10)
-
         def save_app_settings():
             self.cur.execute("UPDATE settings SET valeur=? WHERE cle='font_size'", (self.cb_font.get(),))
             self.cur.execute("UPDATE settings SET valeur=? WHERE cle='theme'", (self.cb_theme.get(),))
             self.conn.commit()
-            messagebox.showinfo("APPARENCE", "Modifications enregistrées !\nVeuillez redémarrer pour appliquer.")
-        ctk.CTkButton(t_app, text="💾 SAUVEGARDER LE STYLE", height=50, fg_color=C_INFO, command=save_app_settings).pack(pady=30)
+            messagebox.showinfo("OK", "Redémarrer pour appliquer.")
+        ctk.CTkButton(t_app, text="💾 SAUVEGARDER", height=50, fg_color=C_INFO, command=save_app_settings).pack(pady=30)
 
-        # --- 2. SOUS-ONGLET : SYSTÈME ---
-        ctk.CTkLabel(t_sys, text="PARAMÈTRES DE L'ÉTABLISSEMENT", font=self.f_title).pack(pady=20)
-        ctk.CTkLabel(t_sys, text="Nom du Commerce (En-tête ticket)", font=self.f_small).pack(pady=5)
+        # 2. SYSTÈME
+        ctk.CTkLabel(t_sys, text="PARAMÈTRES ÉTABLISSEMENT", font=self.f_title).pack(pady=20)
         self.en_store = ctk.CTkEntry(t_sys, width=400, height=50, font=self.f_norm, justify="center")
-        self.en_store.insert(0, self.store_name)
-        self.en_store.pack(pady=10)
-        
-        ctk.CTkLabel(t_sys, text="Seuil d'alerte Stock Bas", font=self.f_small).pack(pady=5)
+        self.en_store.insert(0, self.store_name); self.en_store.pack(pady=10)
         self.en_alert = ctk.CTkEntry(t_sys, width=150, height=50, font=self.f_norm, justify="center")
-        self.en_alert.insert(0, str(self.alert_thr))
-        self.en_alert.pack(pady=10)
-
+        self.en_alert.insert(0, str(self.alert_thr)); self.en_alert.pack(pady=10)
         def save_sys_settings():
             self.cur.execute("UPDATE settings SET valeur=? WHERE cle='store_name'", (self.en_store.get().upper(),))
             self.cur.execute("UPDATE settings SET valeur=? WHERE cle='stock_alert'", (self.en_alert.get(),))
             self.conn.commit()
-            messagebox.showinfo("SYSTÈME", "Paramètres système mis à jour.")
-        ctk.CTkButton(t_sys, text="💾 ENREGISTRER SYSTÈME", height=50, fg_color=C_OK, command=save_sys_settings).pack(pady=30)
+            messagebox.showinfo("OK", "Enregistré.")
+        ctk.CTkButton(t_sys, text="💾 ENREGISTRER", height=50, fg_color=C_OK, command=save_sys_settings).pack(pady=30)
 
-        # --- 3. SOUS-ONGLET : IMPRIMANTE ---
-        ctk.CTkLabel(t_prn, text="CONFIGURATION IMPRESSION", font=self.f_title).pack(pady=20)
-        printers = PrinterManager.get_printers()
-        self.cb_prn = ctk.CTkComboBox(t_prn, values=printers, width=400, height=50, font=self.f_norm)
-        self.cb_prn.set(self.sel_print)
-        self.cb_prn.pack(pady=10)
-        
-        def save_printer_choice():
+        # 3. IMPRIMANTE
+        ctk.CTkLabel(t_prn, text="IMPRIMANTE THERMIQUE", font=self.f_title).pack(pady=20)
+        self.cb_prn = ctk.CTkComboBox(t_prn, values=PrinterManager.get_printers(), width=400, height=50, font=self.f_norm)
+        self.cb_prn.set(self.sel_print); self.cb_prn.pack(pady=10)
+        def save_prn():
             self.cur.execute("UPDATE settings SET valeur=? WHERE cle='printer'", (self.cb_prn.get(),))
             self.conn.commit()
-            messagebox.showinfo("IMPRIMANTE", f"Par défaut : {self.cb_prn.get()}")
-        ctk.CTkButton(t_prn, text="✅ DÉFINIR PAR DÉFAUT", height=50, command=save_printer_choice).pack(pady=30)
+            messagebox.showinfo("OK", "Imprimante par défaut définie.")
+        ctk.CTkButton(t_prn, text="✅ DÉFINIR", height=50, command=save_prn).pack(pady=30)
 
-        # --- 4. SOUS-ONGLET : OUTILS ---
-        ctk.CTkLabel(t_tl, text="MAINTENANCE ET SÉCURITÉ", font=self.f_title).pack(pady=20)
+        # 4. OUTILS
+        ctk.CTkLabel(t_tl, text="MAINTENANCE", font=self.f_title).pack(pady=20)
         ctk.CTkButton(t_tl, text="📂 DOSSIER SOURCE", height=55, command=lambda: os.startfile(os.getcwd())).pack(pady=10, fill="x", padx=100)
-        ctk.CTkButton(t_tl, text="💾 BACKUP BASE DE DONNÉES", height=55, fg_color=C_OK, command=self.db_backup).pack(pady=10, fill="x", padx=100)
-        ctk.CTkButton(t_tl, text="🔄 VÉRIFIER MISE À JOUR", height=55, fg_color=C_INFO, command=UpdateManager.check_update).pack(pady=10, fill="x", padx=100)
-        
-        # --- 5. SOUS-ONGLET : CONTACT ---
-        ctk.CTkLabel(t_ct, text="SUPPORT TECHNIQUE", font=self.f_title).pack(pady=20)
-        ctk.CTkLabel(t_ct, text=f"👤 DÉVELOPPEUR : {DEV_NAME}", font=self.f_norm).pack(pady=5)
-        ctk.CTkLabel(t_ct, text=f"📧 EMAIL : {DEV_EMAIL}", font=self.f_norm).pack(pady=5)
-        ctk.CTkLabel(t_ct, text=f"📞 TÉL : {DEV_PHONE}", font=self.f_norm).pack(pady=5)
-        ctk.CTkButton(t_ct, text="🌐 VOIR GITHUB", fg_color=C_SEC, command=lambda: webbrowser.open("https://github.com/doufall")).pack(pady=20)
-        
-        info_frame = ctk.CTkFrame(t_ct, fg_color="transparent")
-        info_frame.pack(pady=10)
-        
-        ctk.CTkLabel(info_frame, text=f"👤 DÉVELOPPEUR : {DEV_NAME}", font=self.f_norm).pack(pady=5)
-        ctk.CTkLabel(info_frame, text=f"📧 EMAIL : {DEV_EMAIL}", font=self.f_norm).pack(pady=5)
-        ctk.CTkLabel(info_frame, text=f"📞 TÉL : {DEV_PHONE}", font=self.f_norm).pack(pady=5)
-        ctk.CTkLabel(info_frame, text="📍 LIBREVILLE, GABON", font=self.f_norm).pack(pady=5)
-        
-        ctk.CTkButton(t_ct, text="🌐 VOIR LE SITE WEB", fg_color=C_SEC, command=lambda: webbrowser.open("https://github.com/doufall")).pack(pady=20)
+        ctk.CTkButton(t_tl, text="💾 BACKUP BDD", height=55, fg_color=C_OK, command=self.db_backup).pack(pady=10, fill="x", padx=100)
+        ctk.CTkButton(t_tl, text="🔄 MISE À JOUR", height=55, fg_color=C_INFO, command=UpdateManager.check_update).pack(pady=10, fill="x", padx=100)
 
+        # 5. CONTACT
+        ctk.CTkLabel(t_ct, text="SUPPORT TECHNIQUE", font=self.f_title).pack(pady=20)
+        ctk.CTkLabel(t_ct, text=f"DÉVELOPPEUR : {DEV_NAME}\n{DEV_EMAIL}\n{DEV_PHONE}", font=self.f_norm).pack(pady=20)
+        ctk.CTkButton(t_ct, text="GITHUB", command=lambda: webbrowser.open("https://github.com/doufall")).pack()
+
+    # =============================================================================
+    # LOGS ET FERMETURE
+    # =============================================================================
     def init_logs(self):
         f = ctk.CTkFrame(self.t_logs); f.pack(fill="both", expand=True, padx=10, pady=10)
         self.log_tree = ttk.Treeview(f, columns=("Date", "User", "Action", "Détail"), show="headings")
@@ -939,9 +841,8 @@ if __name__ == "__main__":
     lock = check_single_instance()
     if not lock:
         root = ctk.CTk(); root.withdraw()
-        messagebox.showerror("ERREUR", "DRINK MANAGER PRO est déjà ouvert !")
+        messagebox.showerror("ERREUR", "LOGICIEL DÉJÀ OUVERT !")
         sys.exit(0)
         
     app = DrinkManagerEnterprise()
     app.mainloop()
-# %%
