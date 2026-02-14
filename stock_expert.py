@@ -14,14 +14,15 @@ import time
 import subprocess
 import urllib.request
 import webbrowser
-import socket  
+import socket 
+import json 
 from datetime import datetime, timedelta
-
+from tkcalendar import DateEntry # À ajouter dans tes imports
 # =============================================================================
 # CONFIGURATION GLOBALE
 # =============================================================================
 APP_NAME = "DRINK MANAGER PRO"
-APP_VERSION = "v40.0" 
+APP_VERSION = "v41.0" 
 DB_FILE = "enterprise_data.db"
 PORT_LOCK = 65432 
 
@@ -206,7 +207,13 @@ class DrinkManagerEnterprise(ctk.CTk):
         self.apply_style()
         
         self.hwid = SecurityEngine.get_hwid()
-        self.user = None; self.cart = {}; self.trial = False
+        
+        # --- MODIFICATION ICI ---
+        self.user = None
+        self.cart = {}
+        self.current_note_name = None  # <--- MÉMOIRE DU NOM DU CLIENT
+        self.trial = False
+        # ------------------------
         
         self.after(2000, UpdateManager.check_update)
         self.check_lic()
@@ -218,6 +225,13 @@ class DrinkManagerEnterprise(ctk.CTk):
     def clear(self): 
         for w in self.winfo_children(): w.destroy()
 
+    def clear_cart_full(self): 
+        """ Vide le panier ET oublie le nom de la note en cours """
+        self.cart.clear()
+        self.current_note_name = None  # On remet la mémoire à zéro
+        self.upd_cart()               # On rafraîchit l'affichage
+        print("Panier et mémoire client réinitialisés.")
+
     def ask_admin(self):
         p = simpledialog.askstring("SÉCURITÉ", "Mot de passe ADMIN :", show="*")
         if not p: return False
@@ -225,12 +239,92 @@ class DrinkManagerEnterprise(ctk.CTk):
         r = self.cur.fetchone()
         if r and r[0] == p: return True
         messagebox.showerror("REFUSÉ", "Mot de passe incorrect."); return False
+    
+    
+
+    def init_journal(self):
+        # 1. On utilise le bon nom d'onglet : self.t_logs
+        for w in self.t_logs.winfo_children(): 
+            w.destroy()
+
+        # --- BARRE DE FILTRE ---
+        # Ici aussi, on remplace t_journal par t_logs
+        f_filter = ctk.CTkFrame(self.t_logs)
+        f_filter.pack(fill="x", padx=10, pady=10)
+
+        ctk.CTkLabel(f_filter, text="📅 Historique du :", font=("Arial", 14, "bold")).pack(side="left", padx=10)
+
+        # Import local pour éviter les plantages si non installé
+        try:
+            from tkcalendar import DateEntry 
+            self.cal_journal = DateEntry(f_filter, width=12, background='darkblue', 
+                                         foreground='white', borderwidth=2, date_pattern='y-mm-dd')
+            self.cal_journal.pack(side="left", padx=10)
+        except ImportError:
+            # Solution de secours si tkcalendar n'est pas là
+            self.cal_journal = ctk.CTkEntry(f_filter, placeholder_text="AAAA-MM-DD")
+            self.cal_journal.pack(side="left", padx=10)
+
+        ctk.CTkButton(f_filter, text="🔍 FILTRER", width=100, command=self.ref_journal).pack(side="left", padx=5)
+        ctk.CTkButton(f_filter, text="TOUT", width=60, fg_color="gray", command=self.ref_journal_all).pack(side="left", padx=5)
+
+        # --- LE TABLEAU (Treeview) ---
+        # On utilise encore self.t_logs
+        f_tree = ctk.CTkFrame(self.t_logs)
+        f_tree.pack(fill="both", expand=True, padx=10, pady=10)
+
+        from tkinter import ttk
+        columns = ("date", "user", "action", "detail")
+        self.tree_j = ttk.Treeview(f_tree, columns=columns, show="headings")
+    
+        self.tree_j.heading("date", text="Date & Heure")
+        self.tree_j.heading("user", text="Utilisateur")
+        self.tree_j.heading("action", text="Action")
+        self.tree_j.heading("detail", text="Détails")
+    
+        self.tree_j.column("date", width=150)
+        self.tree_j.column("user", width=100)
+        self.tree_j.column("action", width=120)
+        self.tree_j.column("detail", width=400)
+
+        self.tree_j.pack(side="left", fill="both", expand=True)
+    
+        scv = ttk.Scrollbar(f_tree, orient="vertical", command=self.tree_j.yview)
+        self.tree_j.configure(yscrollcommand=scv.set)
+        scv.pack(side="right", fill="y")
+
+        # Charger les données au démarrage
+        self.ref_journal()
+
+    # --- GARDER L'ALIGNEMENT CI-DESSOUS ---
+
+    def ref_journal(self):
+        """ Filtre le journal par la date du calendrier """
+        try:
+            # Gestion de la date selon si c'est DateEntry ou un Entry simple
+            if hasattr(self.cal_journal, 'get_date'):
+                date_sel = self.cal_journal.get_date().strftime("%Y-%m-%d")
+            else:
+                date_sel = self.cal_journal.get()
+                
+            for i in self.tree_j.get_children(): self.tree_j.delete(i)
+    
+            self.cur.execute("SELECT timestamp, user, action, detail FROM audit_logs WHERE timestamp LIKE ? ORDER BY id DESC", (f"{date_sel}%",))
+            for row in self.cur.fetchall():
+                self.tree_j.insert("", "end", values=row)
+        except: pass
+
+    def ref_journal_all(self):
+        """ Affiche tout sans filtre """
+        for i in self.tree_j.get_children(): self.tree_j.delete(i)
+        self.cur.execute("SELECT timestamp, user, action, detail FROM audit_logs ORDER BY id DESC LIMIT 500")
+        for row in self.cur.fetchall():
+            self.tree_j.insert("", "end", values=row)
 
     # --- BDD & CONFIG ---
 
 
     def init_db(self):
-
         tables = [
             "CREATE TABLE IF NOT EXISTS products (id INTEGER PRIMARY KEY, name TEXT UNIQUE, category TEXT, sell_price INT, buy_price INT, stock_qty INT, min_alert INT DEFAULT 5)",
             "CREATE TABLE IF NOT EXISTS categories (name TEXT PRIMARY KEY)",
@@ -239,9 +333,13 @@ class DrinkManagerEnterprise(ctk.CTk):
             "CREATE TABLE IF NOT EXISTS stock_movements (id INTEGER PRIMARY KEY, date TEXT, prod_name TEXT, qty INT, type TEXT, reason_or_ref TEXT, user TEXT)",
             "CREATE TABLE IF NOT EXISTS audit_logs (id INTEGER PRIMARY KEY, timestamp TEXT, user TEXT, action TEXT, detail TEXT)",
             "CREATE TABLE IF NOT EXISTS staff (username TEXT PRIMARY KEY, password TEXT, role TEXT)",
-            "CREATE TABLE IF NOT EXISTS settings (cle TEXT PRIMARY KEY, valeur TEXT)"
+            "CREATE TABLE IF NOT EXISTS settings (cle TEXT PRIMARY KEY, valeur TEXT)",
+            # --- LA NOUVELLE TABLE POUR TES CONSOMMATIONS SUIVIES ---
+            "CREATE TABLE IF NOT EXISTS notes_ouvertes (id INTEGER PRIMARY KEY, nom_client TEXT, panier_data TEXT, total_provisoire INT)"
         ]
-        for q in tables: self.cur.execute(q)
+        
+        for q in tables: 
+            self.cur.execute(q)
         
         defaults = [('store_name', 'MA BOUTIQUE'), ('license_key', ''), ('install_date', datetime.now().strftime("%Y-%m-%d")), ('theme', 'System'), ('font_family', 'Arial'), ('font_size', '18'), ('printer', ''), ('stock_alert', '5')]
         self.cur.executemany("INSERT OR IGNORE INTO settings VALUES (?,?)", defaults)
@@ -250,6 +348,7 @@ class DrinkManagerEnterprise(ctk.CTk):
         self.cur.execute("SELECT count(*) FROM staff WHERE role='admin'")
         if self.cur.fetchone()[0] == 0:
             self.cur.execute("INSERT INTO staff VALUES ('admin','admin','admin')")
+            
         self.conn.commit()
 
     def load_cfg(self):
@@ -369,7 +468,7 @@ class DrinkManagerEnterprise(ctk.CTk):
             self.t_stf = self.main_tabs.add("EQUIPE")
             self.t_stat = self.main_tabs.add("RAPPORTS")
             self.t_cfg = self.main_tabs.add("CONFIG")
-            self.t_logs = self.main_tabs.add("JOURNAL")
+            self.t_logs = self.main_tabs.add("JOURNAL") # C'est ton onglet t_logs
             
             try: self.init_staff()
             except: pass
@@ -379,6 +478,12 @@ class DrinkManagerEnterprise(ctk.CTk):
             except: pass
             try: self.init_logs()
             except: pass
+
+            # --- CORRECTION ICI ---
+            try: 
+                self.init_journal() # On appelle le nom exact de la fonction
+            except Exception as e: 
+                print(f"Erreur init journal: {e}")
 
         self.init_pos()
         self.init_stock()
@@ -430,11 +535,25 @@ class DrinkManagerEnterprise(ctk.CTk):
         ctk.CTkLabel(rf, text="PANIER", font=self.f_title).pack(pady=10)
         self.cv = ctk.CTkScrollableFrame(rf); self.cv.pack(fill="both", expand=True)
         self.lt = ctk.CTkLabel(rf, text="TOTAL: 0 FCFA", font=("Arial", 30, "bold"), text_color=C_OK); self.lt.pack(pady=20)
+
+        # --- NOUVEAU : CADRE POUR LES NOTES EN ATTENTE ---
+        f_notes = ctk.CTkFrame(rf, fg_color="transparent")
+        f_notes.pack(fill="x", padx=10, pady=5)
+
+        ctk.CTkButton(f_notes, text="📥 EN ATTENTE", fg_color="#f39c12", height=50, 
+                      font=("Arial", 14, "bold"), command=self.save_note).pack(side="left", fill="x", expand=True, padx=(0,2))
+        
+        ctk.CTkButton(f_notes, text="📂 RAPPELER", fg_color="#3498db", height=50, 
+                      font=("Arial", 14, "bold"), command=self.list_notes).pack(side="left", fill="x", expand=True, padx=(2,0))
+        # ------------------------------------------------
         
         ctk.CTkButton(rf, text="ENCAISSER (PAYER)", fg_color=C_OK, height=80, font=("Arial", 20, "bold"), command=self.pay).pack(fill="x", padx=10, pady=10)
-        ctk.CTkButton(rf, text="VIDER PANIER", fg_color=C_ERR, height=50, font=self.f_norm, command=lambda: (self.cart.clear(), self.upd_cart())).pack(fill="x", padx=10, pady=5)
+        ctk.CTkButton(rf, text="VIDER PANIER", fg_color=C_ERR, height=50, font=self.f_norm,command=self.clear_cart_full).pack(fill="x", padx=10, pady=5)
         self.ref_pos()
-
+    
+    
+    
+    
     def ref_pos(self):
         for w in self.gp.winfo_children():
             w.destroy()
@@ -493,6 +612,12 @@ class DrinkManagerEnterprise(ctk.CTk):
             ctk.CTkLabel(r, text=f"x{d['q']}", font=self.f_norm, text_color=C_WARN).pack(side="left", padx=5)
             ctk.CTkButton(r, text="X", width=40, fg_color=C_ERR, command=lambda x=n: (self.cart.pop(x), self.upd_cart())).pack(side="right")
             ctk.CTkLabel(r, text=f"{s} F", font=self.f_norm).pack(side="right", padx=10)
+            # --- MODIFICATION ICI : Affichage du nom de la note ---
+        if self.current_note_name:
+            self.lt.configure(text=f"[{self.current_note_name}] TOTAL: {t} FCFA", text_color="#f39c12")
+        else:
+            self.lt.configure(text=f"TOTAL: {t} FCFA", text_color=C_OK)
+
         self.lt.configure(text=f"TOTAL: {t} FCFA")
 
     def pay(self):
@@ -663,7 +788,85 @@ class DrinkManagerEnterprise(ctk.CTk):
         
         # Raccourci touche Entrée
         w.bind('<Return>', val)
+
+    def save_note(self):
+        if not self.cart: return
         
+        # 1. Déterminer le nom (demander si nouveau, sinon utiliser la mémoire)
+        if not self.current_note_name:
+            nom = ctk.CTkInputDialog(text="Nom du client / Table :", title="Mise en attente").get_input()
+            if not nom or not nom.strip(): return
+            self.current_note_name = nom.strip().upper()
+
+        try:
+            panier_json = json.dumps(self.cart)
+            total = sum(d['q'] * d['p'] for d in self.cart.values())
+            
+            # 2. Vérifier si cette note existe déjà dans la BDD pour ce nom
+            self.cur.execute("SELECT id FROM notes_ouvertes WHERE nom_client=?", (self.current_note_name,))
+            existe = self.cur.fetchone()
+            
+            if existe:
+                # Mise à jour de la note existante
+                self.cur.execute("UPDATE notes_ouvertes SET panier_data=?, total_provisoire=? WHERE nom_client=?",
+                                 (panier_json, total, self.current_note_name))
+            else:
+                # Création d'une nouvelle note
+                self.cur.execute("INSERT INTO notes_ouvertes (nom_client, panier_data, total_provisoire) VALUES (?,?,?)",
+                                 (self.current_note_name, panier_json, total))
+            
+            self.conn.commit()
+            self.tracer("NOTE", f"Note '{self.current_note_name}' mise en attente.")
+            
+            # 3. Réinitialisation complète pour le client suivant
+            self.clear_cart_full() 
+            messagebox.showinfo("OK", "Commande mise en attente !")
+            
+        except Exception as e:
+            messagebox.showerror("ERREUR", f"Erreur note : {e}")
+
+    def list_notes(self):
+        """ Affiche la liste des notes à reprendre """
+        self.cur.execute("SELECT id, nom_client, total_provisoire FROM notes_ouvertes")
+        notes = self.cur.fetchall()
+        
+        if not notes:
+            messagebox.showinfo("INFO", "Aucune note en attente.")
+            return
+
+        w = ctk.CTkToplevel(self)
+        w.title("NOTES EN ATTENTE")
+        w.geometry("450x550")
+        w.grab_set()
+
+        ctk.CTkLabel(w, text="CHOISIR UNE NOTE À REPRENDRE", font=("Arial", 16, "bold")).pack(pady=15)
+        
+        container = ctk.CTkScrollableFrame(w)
+        container.pack(fill="both", expand=True, padx=10, pady=10)
+
+        for id_n, nom, tot in notes:
+            f = ctk.CTkFrame(container)
+            f.pack(fill="x", pady=5)
+            
+            ctk.CTkLabel(f, text=f"👤 {nom}", font=("Arial", 14, "bold")).pack(side="left", padx=10, pady=10)
+            ctk.CTkLabel(f, text=f"{tot} F", text_color=C_OK).pack(side="left", padx=10)
+            
+            def reprendre(idx=id_n, n_client=nom): # On ajoute le nom en argument
+                self.cur.execute("SELECT panier_data FROM notes_ouvertes WHERE id=?", (idx,))
+                data = self.cur.fetchone()[0]
+                
+                self.cart = json.loads(data)
+                self.current_note_name = n_client # <--- ON GARDE LE NOM EN MÉMOIRE
+                
+                # On ne supprime plus forcément la note tout de suite, 
+                # ou on la supprime mais self.current_note_name s'en souvient.
+                self.cur.execute("DELETE FROM notes_ouvertes WHERE id=?", (idx,))
+                self.conn.commit()
+                
+                self.upd_cart()
+                w.destroy()
+
+            ctk.CTkButton(f, text="REPRENDRE", width=100, command=reprendre).pack(side="right", padx=10)    
 
     # =============================================================================
     # MODULE STOCK EXPERT (V31.0)
@@ -845,7 +1048,27 @@ class DrinkManagerEnterprise(ctk.CTk):
         ctk.CTkButton(t_prix, text="SAUVEGARDER PRIX", fg_color=C_INFO, command=update_prices).pack(pady=20)
 
         ctk.CTkLabel(t_danger, text="Actions irréversibles", text_color=C_ERR).pack(pady=20)
+     
+        # --- ONGLET ZONE DANGER (CORRECTION & SUPPRESSION) ---
+        ctk.CTkLabel(t_danger, text="--- RECTIFICATION DE STOCK ---", text_color=C_WARN, font=("Arial", 12, "bold")).pack(pady=(10, 5))
+        ctk.CTkLabel(t_danger, text="Utilisez ceci uniquement pour corriger une erreur de saisie.", font=("Arial", 10), text_color="gray").pack()
+        
+        e_rectif = ctk.CTkEntry(t_danger, placeholder_text=f"Nouvelle quantité exacte", width=200, justify="center")
+        e_rectif.pack(pady=10)
 
+        def rectifier_stock():
+            val_saisie = e_rectif.get().strip()
+            if not val_saisie: return
+            nouvelle_q = self.safe_int(val_saisie)
+            
+            if messagebox.askyesno("CONFIRMATION", f"Forcer le stock de {name} à {nouvelle_q} ?\n(Ancien: {qty} -> Nouveau: {nouvelle_q})"):
+                self.cur.execute("UPDATE products SET stock_qty=? WHERE name=?", (nouvelle_q, name))
+                self.tracer("RECTIFICATION", f"Stock {name} forcé de {qty} vers {nouvelle_q}")
+                self.conn.commit(); self.ref_stock_ui(); messagebox.showinfo("OK", "Stock rectifié !"); w.destroy()
+
+        ctk.CTkButton(t_danger, text="RECTIFIER MANUELLEMENT", fg_color="#d35400", command=rectifier_stock).pack(pady=5)
+
+        ctk.CTkLabel(t_danger, text="--------------------------------", text_color="gray").pack(pady=10)
 
         def delete_prod():
             if messagebox.askyesno("DANGER", f"Voulez-vous vraiment supprimer {name} ?"):
@@ -1207,8 +1430,25 @@ class DrinkManagerEnterprise(ctk.CTk):
         if p: shutil.copy2(DB_FILE, p); messagebox.showinfo("OK", "Sauvegardé.")
 
     def close(self):
-        if messagebox.askyesno("QUITTER", "Fermer le logiciel ?"):
-            self.conn.commit(); self.conn.close(); self.destroy()
+        if messagebox.askyesno("QUITTER", "Voulez-vous vraiment fermer l'application ?"):
+            try:
+                # 1. On ferme proprement la connexion SQLite
+                if hasattr(self, 'conn'):
+                    self.conn.close()
+                    print("Base de données fermée.")
+                
+                # 2. On arrête Tkinter
+                self.quit()     # Arrête la boucle mainloop
+                self.destroy()  # Détruit les fenêtres
+                
+                # 3. Sécurité ultime : On force l'arrêt du processus Python
+                import os
+                os._exit(0) 
+                
+            except Exception as e:
+                print(f"Erreur lors de la fermeture : {e}")
+                import os
+                os._exit(0)
 
 # =============================================================================
 # LANCEMENT FINAL
