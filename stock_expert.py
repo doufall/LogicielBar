@@ -17,7 +17,14 @@ import webbrowser
 import socket 
 import json 
 from datetime import datetime, timedelta
-from tkcalendar import DateEntry # À ajouter dans tes imports
+
+# --- IMPORT SÉCURISÉ DU CALENDRIER ---
+try:
+    from tkcalendar import DateEntry
+    HAS_CALENDAR = True
+except ImportError:
+    HAS_CALENDAR = False
+    print("Avertissement : tkcalendar non trouvé. Passage en mode texte.")
 # =============================================================================
 # CONFIGURATION GLOBALE
 # =============================================================================
@@ -243,27 +250,23 @@ class DrinkManagerEnterprise(ctk.CTk):
     
 
     def init_journal(self):
-        # 1. On utilise le bon nom d'onglet : self.t_logs
-        for w in self.t_logs.winfo_children(): 
-            w.destroy()
+        for w in self.t_logs.winfo_children(): w.destroy()
 
-        # --- BARRE DE FILTRE ---
-        # Ici aussi, on remplace t_journal par t_logs
         f_filter = ctk.CTkFrame(self.t_logs)
         f_filter.pack(fill="x", padx=10, pady=10)
 
         ctk.CTkLabel(f_filter, text="📅 Historique du :", font=("Arial", 14, "bold")).pack(side="left", padx=10)
 
-        # Import local pour éviter les plantages si non installé
-        try:
-            from tkcalendar import DateEntry 
+        # --- UTILISATION DU SYSTÈME SÉCURISÉ ---
+        if HAS_CALENDAR:
             self.cal_journal = DateEntry(f_filter, width=12, background='darkblue', 
                                          foreground='white', borderwidth=2, date_pattern='y-mm-dd')
             self.cal_journal.pack(side="left", padx=10)
-        except ImportError:
-            # Solution de secours si tkcalendar n'est pas là
-            self.cal_journal = ctk.CTkEntry(f_filter, placeholder_text="AAAA-MM-DD")
+        else:
+            # Si le calendrier a échoué, on met un champ de texte normal
+            self.cal_journal = ctk.CTkEntry(f_filter, placeholder_text="AAAA-MM-DD", width=150)
             self.cal_journal.pack(side="left", padx=10)
+            self.cal_journal.insert(0, datetime.now().strftime("%Y-%m-%d"))
 
         ctk.CTkButton(f_filter, text="🔍 FILTRER", width=100, command=self.ref_journal).pack(side="left", padx=5)
         ctk.CTkButton(f_filter, text="TOUT", width=60, fg_color="gray", command=self.ref_journal_all).pack(side="left", padx=5)
@@ -312,7 +315,8 @@ class DrinkManagerEnterprise(ctk.CTk):
             self.cur.execute("SELECT timestamp, user, action, detail FROM audit_logs WHERE timestamp LIKE ? ORDER BY id DESC", (f"{date_sel}%",))
             for row in self.cur.fetchall():
                 self.tree_j.insert("", "end", values=row)
-        except: pass
+        except Exception as e: 
+            print(f"Erreur SQL Journal: {e}")
 
     def ref_journal_all(self):
         """ Affiche tout sans filtre """
