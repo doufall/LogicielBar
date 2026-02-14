@@ -34,12 +34,16 @@ jobs:
 
     - name: 5. Installation des modules
       run: |
-        pip install customtkinter pyinstaller pywin32
+        pip install customtkinter pyinstaller pywin32 tkcalendar babel pillow
         pip install "matplotlib<3.8" 
 
     - name: 6. Création du fichier EXE
       run: |
-        pyinstaller --noconsole --onefile --collect-all customtkinter --name "stock_expert_1" stock_expert.py
+        pyinstaller --noconsole --onefile `
+        --collect-all customtkinter `
+        --collect-all tkcalendar `
+        --hidden-import="babel.numbers" `
+        --name "stock_expert_1" stock_expert.py
 
     - name: 7. Création de la Release automatique !
       uses: softprops/action-gh-release@v2
